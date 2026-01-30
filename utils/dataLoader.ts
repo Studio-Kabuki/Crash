@@ -116,19 +116,37 @@ const TRAITS: Record<string, BattleEvent> = {
   ANTI_BUFF: {
     id: 'anti_buff_field',
     title: 'アンチバフ',
-    description: 'バフカードの効果が無効化されます。',
+    description: 'サポートカードの特殊能力が発動しなくなります。',
     physicalMultiplier: 1.0,
     magicMultiplier: 1.0,
-    disableBuffEffects: true,
+    disableSupportEffects: true,
     type: 'negative'
   },
   ARMOR: {
     id: 'heavy_armor',
     title: '重装甲',
-    description: '30以下のダメージを完全に無効化します。',
+    description: '40以下のダメージを完全に無効化します。',
     physicalMultiplier: 1.0,
     magicMultiplier: 1.0,
-    armorThreshold: 30,
+    armorThreshold: 40,
+    type: 'negative'
+  },
+  ARMOR_HEAVY: {
+    id: 'super_armor',
+    title: '超重装甲',
+    description: '60以下のダメージを完全に無効化します。',
+    physicalMultiplier: 1.0,
+    magicMultiplier: 1.0,
+    armorThreshold: 60,
+    type: 'negative'
+  },
+  ARMOR_ULTRA: {
+    id: 'ultra_armor',
+    title: '絶対防御',
+    description: '80以下のダメージを完全に無効化します。',
+    physicalMultiplier: 1.0,
+    magicMultiplier: 1.0,
+    armorThreshold: 80,
     type: 'negative'
   },
   MANA_DRAIN: {

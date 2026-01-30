@@ -2,6 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { Skill, CardProps } from '../types';
 import { Swords, Zap, Ban, Wand2, Hexagon } from 'lucide-react';
+import { calculateHaste, calculateEffectDamage } from '../utils/skillCalculations';
 
 export const Card: React.FC<CardProps> = ({
   skill,
@@ -15,7 +16,8 @@ export const Card: React.FC<CardProps> = ({
   effectsDisabled = false,
   lastCardWasPhysical = false,
   deckSlashCount = 0,
-  enemyDamageTaken = 0
+  enemyDamageTaken = 0,
+  physicalHasteReduction = 0
 }) => {
   const [imgSrc, setImgSrc] = useState<string>(skill.icon);
   const [hasError, setHasError] = useState<boolean>(false);
@@ -64,22 +66,13 @@ export const Card: React.FC<CardProps> = ({
   const hasOnlyBaseDamage = hasBaseDamage && !hasPhysicalRatio && !hasMagicRatio;
   const hasMixedDamage = hasPhysicalRatio && hasMagicRatio;  // 物理+魔法の混合
 
-  // 能力ダメージの計算（バフは考慮しない）
-  let effectDamage = 0;
-  let effectDamageType: 'physical' | 'base' | 'none' = 'none';
-  if (skill.effect && !effectsDisabled) {
-    if (skill.effect.type === 'deck_slash_bonus') {
-      // ファイナルスラッシュ：スラッシュ枚数×値の物理ダメージ
-      const bonusPerSlash = skill.effect.params.value || 30;
-      effectDamage = deckSlashCount * bonusPerSlash;
-      effectDamageType = 'physical';
-    } else if (skill.effect.type === 'enemy_damage_taken') {
-      // 祖国のために：敵の減少HP×係数のダメージ
-      const ratio = (skill.effect.params.value || 100) / 100;
-      effectDamage = Math.floor(enemyDamageTaken * ratio);
-      effectDamageType = 'base';  // ベースダメージ扱い
-    }
-  }
+  // 能力ダメージの計算（共通関数を使用）
+  const { effectDamage, effectDamageType } = calculateEffectDamage({
+    skill,
+    deckSlashCount,
+    enemyDamageTaken,
+    effectsDisabled
+  });
 
   // 最終ダメージ（通常ダメージ + 能力ダメージ）
   const finalDisplayDamage = totalDamage + effectDamage;
@@ -91,13 +84,19 @@ export const Card: React.FC<CardProps> = ({
   const isPhysicalDown = physicalMultiplier < 1;
   const isMagicUp = magicMultiplier > 1;
   const isMagicDown = magicMultiplier < 1;
-  // physical_chain_haste効果の計算
-  const hasPhysicalChainEffect = skill.effect?.type === 'physical_chain_haste';
-  const physicalChainBonus = hasPhysicalChainEffect && lastCardWasPhysical
-    ? (skill.effect?.params.value || 10)
-    : 0;
-  const actualDelay = Math.max(0, skill.delay - physicalChainBonus);
-  const isPhysicalChainActive = hasPhysicalChainEffect && lastCardWasPhysical;
+
+  // ヘイスト計算（共通関数を使用）
+  const hasteResult = calculateHaste({
+    skill,
+    physicalHasteReduction,
+    lastCardWasPhysical
+  });
+  const {
+    actualDelay,
+    isHasteReduced,
+    isPhysicalChainActive,
+    hasPhysicalChainEffect
+  } = hasteResult;
 
   const canAffordMana = mana >= skill.manaCost;
   const canAffordHaste = currentHaste >= actualDelay;
@@ -117,10 +116,13 @@ export const Card: React.FC<CardProps> = ({
     setHasError(true);
   };
 
+  const isDisabled = disabled || !canAfford;
+
   return (
-    <button
-      onClick={canAfford ? onClick : undefined}
-      disabled={disabled || !canAfford}
+    <div
+      onClick={isDisabled ? undefined : onClick}
+      role="button"
+      tabIndex={isDisabled ? -1 : 0}
       className={`
         relative group
         flex flex-col items-center justify-start
@@ -129,9 +131,10 @@ export const Card: React.FC<CardProps> = ({
         ${getRarityBorderColor()}
         shadow-2xl
         transition-all duration-150
-        active:translate-y-1 active:shadow-none
-        hover:-translate-y-2 hover:border-indigo-500 hover:shadow-[0_0_15px_rgba(99,102,241,0.5)]
-        disabled:opacity-40 disabled:cursor-not-allowed
+        ${isDisabled
+          ? 'opacity-40 cursor-not-allowed'
+          : 'cursor-pointer active:translate-y-1 active:shadow-none hover:-translate-y-2 hover:border-indigo-500 hover:shadow-[0_0_15px_rgba(99,102,241,0.5)]'
+        }
         overflow-hidden
       `}
     >
@@ -142,7 +145,7 @@ export const Card: React.FC<CardProps> = ({
       `}>
         {/* ヘイスト（DELAY） */}
         <div className={`flex items-center gap-1 px-1.5 py-0.5 rounded ${
-          isPhysicalChainActive
+          isPhysicalChainActive || isHasteReduced
             ? 'bg-green-500 text-white'
             : actualDelay > 0
               ? 'bg-white text-slate-900'
@@ -150,12 +153,12 @@ export const Card: React.FC<CardProps> = ({
         }`}>
           <Zap className="w-4 h-4" />
           <span className="text-[0.65rem] font-black">
-            {hasPhysicalChainEffect ? (
-              isPhysicalChainActive ? (
-                <><s className="text-green-200">{skill.delay}</s> {actualDelay}</>
-              ) : (
-                <>{skill.delay}<span className="text-[0.5rem] text-slate-500">→{Math.max(0, skill.delay - (skill.effect?.params.value || 10))}</span></>
-              )
+            {/* いずれかの削減が適用されている場合 */}
+            {(isPhysicalChainActive || isHasteReduced) ? (
+              <><s className="text-green-200">{skill.delay}</s> {actualDelay}</>
+            ) : hasPhysicalChainEffect ? (
+              /* physical_chain_haste効果あり、だが前が物理じゃない場合は潜在的な削減値を表示 */
+              <>{skill.delay}<span className="text-[0.5rem] text-slate-500">→{Math.max(0, skill.delay - (skill.effect?.params.value || 10) - hasteResult.hasteReductionBonus)}</span></>
             ) : (
               actualDelay
             )}
@@ -301,6 +304,6 @@ export const Card: React.FC<CardProps> = ({
           </span>
         </div>
       )}
-    </button>
+    </div>
   );
 };

@@ -2,6 +2,8 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { GameState, Skill, PassiveEffect, BattleEvent, Enemy, Rarity, HeroStats, PlayerBuff } from './types';
 import { loadGameData, GameData, DEFAULT_EVENT, createSkillWithId, BUFFS, BuffDefinition, HeroInitialData } from './utils/dataLoader';
+import { calculateHaste } from './utils/skillCalculations';
+import { useDragScroll } from './hooks/useDragScroll';
 import { Card } from './components/Card';
 import { Tooltip } from './components/Tooltip';
 import PlayerStatusPanel from './components/PlayerStatusPanel';
@@ -10,7 +12,7 @@ import {
   ShieldAlert, Sparkles, Ghost, Hexagon,
   CheckCircle2, Info, Award, Undo2, Layers, PlusCircle,
   X, Search, Biohazard, Heart, HeartCrack, Coffee, Coins, ShoppingCart, Check,
-  ZapOff, Star, BookOpen, Settings, RefreshCw
+  ZapOff, Star, BookOpen, Settings, RefreshCw, Trash2
 } from 'lucide-react';
 
 // フォールバック付き画像コンポーネント
@@ -65,7 +67,8 @@ const App: React.FC = () => {
   const [shopPassives, setShopPassives] = useState<PassiveEffect[]>([]);
   const [purchasedPassiveIds, setPurchasedPassiveIds] = useState<Set<string>>(new Set());
   const [purchasedIds, setPurchasedIds] = useState<Set<string>>(new Set());
-  const [hasBoughtLife, setHasBoughtLife] = useState<boolean>(false);
+  const [hasBoughtShopService, setHasBoughtShopService] = useState<boolean>(false);
+  const [isCardRemoveOverlayOpen, setIsCardRemoveOverlayOpen] = useState<boolean>(false);
 
   // Status Effects
   const [isEnemyPoisoned, setIsEnemyPoisoned] = useState<boolean>(false);
@@ -79,6 +82,7 @@ const App: React.FC = () => {
   // 手札システム
   const [baseHandSize, setBaseHandSize] = useState<number>(3); // 基礎手札枚数
   const [isShuffling, setIsShuffling] = useState<boolean>(false); // シャッフル中表示
+  const [isProcessingCard, setIsProcessingCard] = useState<boolean>(false); // カード処理中フラグ
 
   // Deck Overlay State
   const [isDeckOverlayOpen, setIsDeckOverlayOpen] = useState<boolean>(false);
@@ -125,6 +129,9 @@ const App: React.FC = () => {
   const [currentEnemy, setCurrentEnemy] = useState<Enemy>({ name: '', icon: '', baseHP: 0, minFloor: 0, maxFloor: 0, dropsAbility: 'N' });
   const [enemyHealth, setEnemyHealth] = useState<number>(0);
   const [floatingDamages, setFloatingDamages] = useState<{ id: string; value: number; isMana?: boolean; isPoison?: boolean }[]>([]);
+
+  // 手札エリアのドラッグスクロール
+  const { containerRef: handContainerRef, shouldPreventClick, containerProps: handContainerProps } = useDragScroll({ threshold: 10 });
 
   // ヘイスト（行動力）の最大値
   const maxHaste = useMemo(() => {
@@ -276,8 +283,9 @@ const App: React.FC = () => {
 
   const getCardPrice = (rarity: Rarity) => {
     if (rarity === 'SSR') return 100;
+    if (rarity === 'SR') return 80;
     if (rarity === 'R') return 50;
-    return 20;
+    return 30;
   };
 
   const getPassivePrice = (rarity: Rarity) => {
@@ -286,7 +294,8 @@ const App: React.FC = () => {
     return 40;
   };
 
-  const LIFE_RECOVERY_PRICE = 30;
+  const LIFE_RECOVERY_PRICE = 50;
+  const CARD_REMOVE_PRICE = 50;
 
   // レアリティに基づく重み付け抽選
   const weightedRandomSelect = <T extends { rarity: Rarity }>(items: T[], count: number): T[] => {
@@ -331,6 +340,9 @@ const App: React.FC = () => {
     return baseHandSize + handSizeBonus;
   }, [baseHandSize, passives]);
 
+  // 物理のみカードのヘイスト削減率（迅速の刃パッシブ）- 直接計算
+  const physicalHasteReduction = passives.filter(p => p.type === 'physical_haste_reduction').reduce((sum, p) => sum + p.value, 0);
+
   // 手札を引く（手札が0枚のときにhandSize枚まで引く）
   const drawHand = useCallback((currentDeck: Skill[], remainingHaste: number, currentStack?: Skill[], currentHandSize?: number) => {
     const targetHandSize = currentHandSize ?? handSize;
@@ -343,11 +355,12 @@ const App: React.FC = () => {
     let availableDeck = [...currentDeck];
     const stackToUse = currentStack ?? stack;
 
-    // デッキが足りない場合、捨て札をシャッフルして山札に戻す
+    // デッキが足りない場合、捨て札をシャッフルして山札に戻す（精神統一ダミーカードは除外）
     if (availableDeck.length < targetHandSize) {
-      if (stackToUse.length > 0) {
+      const realCards = stackToUse.filter(s => s.id !== 'rest');
+      if (realCards.length > 0) {
         setIsShuffling(true);
-        const recycledCards = shuffle([...stackToUse]);
+        const recycledCards = shuffle([...realCards]);
         availableDeck = [...availableDeck, ...recycledCards];
         // 捨て札をクリア（状態は後で更新）
         setTimeout(() => setIsShuffling(false), 800);
@@ -369,11 +382,40 @@ const App: React.FC = () => {
 
     setHand(newHand);
     setDeck(newDeck);
-    // 捨て札から戻した場合はスタックをクリア
+    // 捨て札から戻した場合はスタックをクリアし、コンボパワーもリセット
     if (availableDeck.length > currentDeck.length) {
       setStack([]);
+      setCurrentComboPower(0);
     }
   }, [handSize, stack]);
+
+  // カード効果でドロー（上限なし、現在の手札に追加）
+  const drawCards = useCallback((count: number, currentHand: Skill[], currentDeck: Skill[], currentStack: Skill[]) => {
+    if (count <= 0) return { newHand: currentHand, newDeck: currentDeck, newStack: currentStack };
+
+    let availableDeck = [...currentDeck];
+    // 精神統一ダミーカードは除外
+    let stackToRecycle = currentStack.filter(s => s.id !== 'rest');
+
+    // 山札が足りない場合、捨て札をシャッフルして山札に追加
+    if (availableDeck.length < count && stackToRecycle.length > 0) {
+      setIsShuffling(true);
+      availableDeck = [...availableDeck, ...shuffle(stackToRecycle)];
+      stackToRecycle = [];
+      setTimeout(() => setIsShuffling(false), 800);
+    }
+
+    // 引けるだけ引く
+    const cardsToDraw = Math.min(count, availableDeck.length);
+    const drawnCards = availableDeck.slice(0, cardsToDraw);
+    const remainingDeck = availableDeck.slice(cardsToDraw);
+
+    return {
+      newHand: [...currentHand, ...drawnCards],
+      newDeck: remainingDeck,
+      newStack: stackToRecycle
+    };
+  }, []);
 
   const getEnemyForLevel = (lvl: number) => {
       if (!gameData) return { name: '', icon: '', baseHP: 0, minFloor: 0, maxFloor: 0 };
@@ -465,13 +507,24 @@ const App: React.FC = () => {
     const selectedCards = weightedRandomSelect(gameData.skillPool, 5);
     setShopCards(selectedCards.map(s => createSkillWithId(s)));
 
+    // SR/SSRは同じアビリティ（同じid）を重複して持てない
+    const ownedHighRarityIds = passives
+      .filter(p => p.rarity === 'SR' || p.rarity === 'SSR')
+      .map(p => p.id);
+    const filteredPassivePool = (gameData.passivePool || []).filter(p => {
+      if (p.rarity === 'SR' || p.rarity === 'SSR') {
+        return !ownedHighRarityIds.includes(p.id);
+      }
+      return true;
+    });
+
     // Generate 3 random passives with rarity weighting
-    const selectedPassives = weightedRandomSelect(gameData.passivePool || [], 3);
+    const selectedPassives = weightedRandomSelect(filteredPassivePool, 3);
     setShopPassives(selectedPassives);
 
     setPurchasedIds(new Set());
     setPurchasedPassiveIds(new Set());
-    setHasBoughtLife(false);
+    setHasBoughtShopService(false);
   };
 
   const enterShop = () => {
@@ -517,11 +570,26 @@ const App: React.FC = () => {
   };
 
   const handleBuyLife = () => {
-    if (gold < LIFE_RECOVERY_PRICE || life >= maxLife || hasBoughtLife) return;
+    if (gold < LIFE_RECOVERY_PRICE || life >= maxLife || hasBoughtShopService) return;
 
     setGold(prev => prev - LIFE_RECOVERY_PRICE);
     setLife(prev => Math.min(maxLife, prev + 1));
-    setHasBoughtLife(true);
+    setHasBoughtShopService(true);
+  };
+
+  const handleBuyCardRemove = () => {
+    if (gold < CARD_REMOVE_PRICE || hasBoughtShopService || permanentDeck.length <= 1) return;
+
+    setGold(prev => prev - CARD_REMOVE_PRICE);
+    setIsCardRemoveOverlayOpen(true);
+  };
+
+  const handleRemoveCard = (cardId: string) => {
+    setPermanentDeck(prev => prev.filter(c => c.id !== cardId));
+    setDeck(prev => prev.filter(c => c.id !== cardId));
+    setHand(prev => prev.filter(c => c.id !== cardId));
+    setIsCardRemoveOverlayOpen(false);
+    setHasBoughtShopService(true);
   };
 
   const generateShopOptions = (commonOnly: boolean = false) => {
@@ -529,6 +597,16 @@ const App: React.FC = () => {
     if (commonOnly) {
       pool = pool.filter(p => p.rarity === 'C');
     }
+    // SR/SSRは同じアビリティ（同じid）を重複して持てない
+    const ownedHighRarityIds = passives
+      .filter(p => p.rarity === 'SR' || p.rarity === 'SSR')
+      .map(p => p.id);
+    pool = pool.filter(p => {
+      if (p.rarity === 'SR' || p.rarity === 'SSR') {
+        return !ownedHighRarityIds.includes(p.id);
+      }
+      return true;
+    });
     const shuffled = pool.sort(() => 0.5 - Math.random());
     setShopOptions(shuffled.slice(0, 3));
   };
@@ -680,7 +758,7 @@ const App: React.FC = () => {
     return finalPower;
   };
 
-  const handleEnemyAttack = (currentStack: Skill[], currentDeck: Skill[]) => {
+  const handleEnemyAttack = (currentStack: Skill[], currentDeck: Skill[], currentHand: Skill[]) => {
     // 即座にフラグを設定して連打を防止
     setIsMonsterAttacking(true);
     setTimeout(() => {
@@ -699,11 +777,33 @@ const App: React.FC = () => {
             setTimeout(() => {
               setTurnResetMessage(false);
               // 手札がhandSize未満なら、handSizeまで引く
-              const currentHandCount = hand.length;
+              const currentHandCount = currentHand.length;
               const needToDraw = Math.max(0, handSize - currentHandCount);
               if (needToDraw > 0) {
-                // drawHandを使って引く（山札が足りなければ捨て札をリサイクル）
-                drawHand(currentDeck, heroStats.sp, currentStack, handSize);
+                // 山札から引く。足りなければ捨て札をリサイクル（精神統一ダミーカードは除外）
+                let availableDeck = [...currentDeck];
+                let stackToRecycle = currentStack.filter(s => s.id !== 'rest');
+
+                // 山札が足りない場合、捨て札をシャッフルして山札に追加
+                if (availableDeck.length < needToDraw && stackToRecycle.length > 0) {
+                  setIsShuffling(true);
+                  availableDeck = [...availableDeck, ...shuffle(stackToRecycle)];
+                  stackToRecycle = [];
+                  setTimeout(() => setIsShuffling(false), 800);
+                }
+
+                // 引けるだけ引く
+                const cardsToDraw = Math.min(needToDraw, availableDeck.length);
+                const drawnCards = availableDeck.slice(0, cardsToDraw);
+                const remainingDeck = availableDeck.slice(cardsToDraw);
+
+                // 既存の手札に追加
+                setHand([...currentHand, ...drawnCards]);
+                setDeck(remainingDeck);
+                if (stackToRecycle.length === 0 && currentStack.length > 0) {
+                  setStack([]);
+                  setCurrentComboPower(0); // コンボパワーもリセット
+                }
               }
             }, 1000);
           }
@@ -723,22 +823,20 @@ const App: React.FC = () => {
     setFloatingDamages(prev => [...prev, { id: mId, value: 30, isMana: true }]);
     setTimeout(() => setFloatingDamages(p => p.filter(d => d.id !== mId)), 1000);
 
-    // UIボタンからの精神統一はヘイストを10消費
+    // UIボタンからの精神統一はヘイストを10消費（スタックには追加しない）
     const restDelay = 10;
-    const dummySkill: Skill = { id: 'rest', name: '精神統一', icon: '', cardType: 'support', baseDamage: 0, adRatio: 0, apRatio: 0, manaCost: 0, delay: restDelay, rarity: 'C', color: '', borderColor: '', borderRadiusClass: '', heightClass: '', widthClass: '' };
-    const newStack = [...stack, dummySkill];
-    setStack(newStack);
-
     const newHaste = Math.round(currentHaste - restDelay);
     setCurrentHaste(newHaste);
 
     if (newHaste <= 0) {
-        handleEnemyAttack(newStack.filter(s => s.id !== 'rest'), deck);
+        handleEnemyAttack(stack, deck, hand);
     }
   };
 
   const selectSkill = (skill: Skill) => {
-    if (currentHaste <= 0 || mana < skill.manaCost || isTargetMet || isMonsterAttacking || turnResetMessage || isShuffling) return;
+    if (currentHaste <= 0 || mana < skill.manaCost || isTargetMet || isMonsterAttacking || turnResetMessage || isShuffling || isProcessingCard) return;
+
+    setIsProcessingCard(true); // カード処理開始
 
     setProjectile({ icon: skill.icon, id: generateId() });
 
@@ -762,26 +860,27 @@ const App: React.FC = () => {
     setHand(newHand);
     setDeck(newDeck);
 
-    // ディレイ計算（物理ヘイスト半減パッシブ対応 + physical_chain_haste効果）
-    const hasPhysicalHasteReduction = passives.some(p => p.type === 'physical_haste_reduction');
-    const isPhysicalOnly = skill.adRatio > 0 && skill.apRatio === 0;
-    let baseDelay = skill.delay;
-
-    // physical_chain_haste効果: 前のカードが物理ならヘイスト減少
-    if (skill.effect?.type === 'physical_chain_haste' && wasLastCardPhysical()) {
-      const hasteBonus = skill.effect.params.value || 10;
-      baseDelay = Math.max(0, baseDelay - hasteBonus);
-    }
-
-    const actualDelay = Math.round(hasPhysicalHasteReduction && isPhysicalOnly ? baseDelay / 2 : baseDelay);
+    // ディレイ計算（共通関数を使用）
+    const { actualDelay } = calculateHaste({
+      skill,
+      physicalHasteReduction,
+      lastCardWasPhysical: wasLastCardPhysical()
+    });
 
     setTimeout(() => {
         setIsMonsterShaking(true);
         setTimeout(() => setIsMonsterShaking(false), 300);
         setProjectile(null);
 
-        // マナ消費/回復（上限をmaxManaに制限）
-        setMana(prev => Math.min(maxMana, prev - skill.manaCost));
+        // mana_consume_damage効果: マナを全消費してダメージに変換
+        let consumedManaForDamage = 0;
+        if (skill.effect?.type === 'mana_consume_damage' && !isEffectDisabled(skill)) {
+          consumedManaForDamage = mana;
+          setMana(0);
+        } else {
+          // 通常のマナ消費/回復（上限をmaxManaに制限）
+          setMana(prev => Math.min(maxMana, prev - skill.manaCost));
+        }
 
         // ヘイスト消費
         const newHaste = Math.round(currentHaste - actualDelay);
@@ -821,19 +920,40 @@ const App: React.FC = () => {
         const newTotalPower = calculateComboPower(newStack);
         let damageDealt = (newTotalPower - currentComboPower) * repeatCount;
         const poisonDmg = isEnemyPoisoned ? 30 : 0;
-        let finalDamage = damageDealt + poisonDmg;
+
+        // mana_consume_damage: 消費マナ×係数の魔法ダメージを追加
+        let manaConsumeDmg = 0;
+        if (consumedManaForDamage > 0 && skill.effect?.type === 'mana_consume_damage') {
+          const ratio = (skill.effect.params.value || 100) / 100;
+          manaConsumeDmg = Math.floor(consumedManaForDamage * ratio * battleEvent.magicMultiplier);
+        }
+
+        // magic_count_bonus: 使用した魔法カード枚数×係数×APダメージ
+        let magicCountDmg = 0;
+        if (skill.effect?.type === 'magic_count_bonus' && !isEffectDisabled(skill)) {
+          const magicCardCount = newStack.filter(s => s.apRatio > 0).length;
+          const ratio = (skill.effect.params.value || 50) / 100;
+          magicCountDmg = Math.floor(magicCardCount * ratio * heroStats.ap * battleEvent.magicMultiplier);
+        }
+
+        let finalDamage = damageDealt + poisonDmg + manaConsumeDmg + magicCountDmg;
 
         // ARMORトレイト: 閾値以下のダメージを無効化
         if (battleEvent.armorThreshold && finalDamage > 0 && finalDamage <= battleEvent.armorThreshold) {
             finalDamage = 0;
         }
 
-        setEnemyHealth(prev => Math.max(0, prev - finalDamage));
+        // ダメージは0以上に制限（マイナスダメージによる回復を防ぐ）
+        const actualDamage = Math.max(0, finalDamage);
+
+        // 新しいenemyHealthを計算（勝利判定に使用）
+        const newEnemyHealth = Math.max(0, enemyHealth - actualDamage);
+        setEnemyHealth(newEnemyHealth);
         setCurrentComboPower(newTotalPower);
         setStack(newStack);
 
         const damageId = generateId();
-        setFloatingDamages(prev => [...prev, { id: damageId, value: finalDamage }]);
+        setFloatingDamages(prev => [...prev, { id: damageId, value: actualDamage }]);
         if (poisonDmg > 0) {
           const pId = generateId();
           setFloatingDamages(prev => [...prev, { id: pId, value: poisonDmg, isPoison: true }]);
@@ -841,12 +961,27 @@ const App: React.FC = () => {
         }
         setTimeout(() => setFloatingDamages(prev => prev.filter(d => d.id !== damageId)), 1000);
 
+        // カード効果をrepeatCount回実行（ためるバフ対応）
         if (skill.effect && !isEffectDisabled(skill)) {
+          for (let i = 0; i < repeatCount; i++) {
            if (skill.effect.type === 'lifesteal') {
-              setMana(prev => Math.min(maxMana, prev + finalDamage));
+              // 1回あたりのダメージで回復（repeatCountは既にactualDamageの計算で考慮されているため1回分）
+              const perHitDamage = Math.floor(actualDamage / repeatCount);
+              setMana(prev => Math.min(maxMana, prev + perHitDamage));
               const mhId = generateId();
-              setFloatingDamages(prev => [...prev, { id: mhId, value: finalDamage, isMana: true }]);
+              setFloatingDamages(prev => [...prev, { id: mhId, value: perHitDamage, isMana: true }]);
               setTimeout(() => setFloatingDamages(p => p.filter(d => d.id !== mhId)), 1000);
+           }
+           if (skill.effect.type === 'magic_lifesteal') {
+              // 魔法ダメージ分のみマナ回復（APレシオ部分のみ）
+              const magicDmg = Math.floor(heroStats.ap * skill.apRatio / 100 * battleEvent.magicMultiplier);
+              const perHitMagicDmg = Math.floor(magicDmg / repeatCount);
+              if (perHitMagicDmg > 0) {
+                setMana(prev => Math.min(maxMana, prev + perHitMagicDmg));
+                const mhId = generateId();
+                setFloatingDamages(prev => [...prev, { id: mhId, value: perHitMagicDmg, isMana: true }]);
+                setTimeout(() => setFloatingDamages(p => p.filter(d => d.id !== mhId)), 1000);
+              }
            }
            if (skill.effect.type === 'poison') setIsEnemyPoisoned(true);
            if (skill.effect.type === 'mana_recovery') {
@@ -872,6 +1007,65 @@ const App: React.FC = () => {
              // newStackも更新（現在の戦闘で反映させるため）
              newStack = newStack.map(updateSkillBaseDamage);
            }
+           if (skill.effect.type === 'draw') {
+             // カード効果でドロー（上限なし）
+             const drawCount = skill.effect.params.value || 1;
+             const drawResult = drawCards(drawCount, newHand, newDeck, newStack);
+             newHand = drawResult.newHand;
+             newDeck = drawResult.newDeck;
+             newStack = drawResult.newStack;
+           }
+           if (skill.effect.type === 'discard_magic_mana') {
+             // 捨て札の魔法カード（apRatio > 0）×valueのマナ回復＋1ドロー
+             const magicCardCount = newStack.filter(s => s.apRatio > 0).length;
+             const manaPerCard = skill.effect.params.value || 10;
+             const recoveryAmount = magicCardCount * manaPerCard;
+             if (recoveryAmount > 0) {
+               setMana(prev => Math.min(maxMana, prev + recoveryAmount));
+               const mhId = generateId();
+               setFloatingDamages(prev => [...prev, { id: mhId, value: recoveryAmount, isMana: true }]);
+               setTimeout(() => setFloatingDamages(p => p.filter(d => d.id !== mhId)), 1000);
+             }
+             // 1ドロー
+             const drawResult = drawCards(1, newHand, newDeck, newStack);
+             newHand = drawResult.newHand;
+             newDeck = drawResult.newDeck;
+             newStack = drawResult.newStack;
+           }
+           if (skill.effect.type === 'add_copy_to_deck') {
+             // このカードのコピーをデッキに追加
+             const cardCopy = { ...skill, id: generateId() };
+             newDeck = [...newDeck, cardCopy];
+           }
+           if (skill.effect.type === 'discard_redraw') {
+             // 手札を全て捨てて、捨てた数+1枚ドロー
+             const discardCount = newHand.length;
+             newStack = [...newStack, ...newHand];
+             newHand = [];
+             const drawResult = drawCards(discardCount + 1, newHand, newDeck, newStack);
+             newHand = drawResult.newHand;
+             newDeck = drawResult.newDeck;
+             newStack = drawResult.newStack;
+           }
+           if (skill.effect.type === 'physical_chain_haste_draw') {
+             // 前が物理攻撃ならドロー
+             if (wasLastCardPhysical()) {
+               const drawCount = skill.effect.params.drawValue || 1;
+               const drawResult = drawCards(drawCount, newHand, newDeck, newStack);
+               newHand = drawResult.newHand;
+               newDeck = drawResult.newDeck;
+               newStack = drawResult.newStack;
+             }
+           }
+          }
+          // draw/discard_magic_mana/add_copy_to_deck/discard_redraw/physical_chain_haste_draw効果の最終結果を反映
+          if (skill.effect.type === 'draw' || skill.effect.type === 'discard_magic_mana' || skill.effect.type === 'add_copy_to_deck' || skill.effect.type === 'discard_redraw' || skill.effect.type === 'physical_chain_haste_draw') {
+            setHand(newHand);
+            setDeck(newDeck);
+            if (newStack.length === 0 && stack.length > 0) {
+              setStack([]);
+            }
+          }
         }
 
         // MANA_DRAINトレイト: カード使用後にマナを減少
@@ -879,8 +1073,8 @@ const App: React.FC = () => {
             setMana(prev => Math.max(0, prev - battleEvent.manaDrainAmount!));
         }
 
-        if (enemyHealth - finalDamage <= 0) {
-            setGold(prev => prev + 40);
+        if (newEnemyHealth <= 0) {
+            setGold(prev => prev + 30);
             setTimeout(() => {
                 const dropType = currentEnemy?.dropsAbility || 'N';
                 if (dropType === 'Y') {
@@ -900,17 +1094,19 @@ const App: React.FC = () => {
                     setIsCardRewardOverlayOpen(true);
                 }
             }, 600);
+            setIsProcessingCard(false); // カード処理終了
             return;
         }
 
         // ヘイストが0以下になったら敵の攻撃
         if (newHaste <= 0) {
-             handleEnemyAttack(newStack, newDeck);
+             handleEnemyAttack(newStack, newDeck, newHand);
         } else if (newHand.length === 0) {
             // 手札が0枚になったらドロー
             drawHand(newDeck, newHaste, newStack);
         }
         // 手札が残っている場合はそのまま（ドローしない）
+        setIsProcessingCard(false); // カード処理終了
     }, 450);
   };
 
@@ -987,40 +1183,37 @@ const App: React.FC = () => {
       {isPlayerTakingDamage && <div className="fixed inset-0 z-[100] bg-red-600 pointer-events-none damage-flash mix-blend-multiply"></div>}
 
       {/* DECK OVERLAY */}
-      {isDeckOverlayOpen && (
+      {isDeckOverlayOpen && (() => {
+        // 戦闘中は山札(deck)を表示、それ以外はpermanentDeckを表示
+        const displayDeck = gameState === 'PLAYING' ? deck : permanentDeck;
+        const deckLabel = gameState === 'PLAYING' ? 'Draw Pile' : 'Current Deck';
+        return (
         <div className="fixed inset-0 z-[100] bg-slate-900/50 backdrop-blur p-4 flex flex-col animate-in fade-in duration-300">
           <div className="w-full max-w-sm md:max-w-md lg:max-w-lg mx-auto flex flex-col h-full">
             <div className="flex justify-between items-center mb-6 pb-4 border-b border-slate-800">
               <div className="flex items-center gap-3">
                 <Layers className="text-indigo-400" size={24} />
-                <h2 className="font-fantasy text-2xl tracking-[0.2em] uppercase text-slate-100">Current Deck</h2>
-                <span className="text-slate-500 text-sm font-bold bg-slate-900 px-3 py-1 rounded-full">{permanentDeck.length} CARDS</span>
+                <h2 className="font-fantasy text-2xl tracking-[0.2em] uppercase text-slate-100">{deckLabel}</h2>
+                <span className="text-slate-500 text-sm font-bold bg-slate-900 px-3 py-1 rounded-full">{displayDeck.length} CARDS</span>
               </div>
               <button onClick={() => setIsDeckOverlayOpen(false)} className="p-2 hover:bg-slate-800 rounded-full text-slate-400 hover:text-white"><X size={28} /></button>
             </div>
             <div className="flex-1 overflow-y-auto no-scrollbar pb-10">
               <div className="deck-grid">
-                {permanentDeck.map((skill, idx) => {
-                  const isAvailable = deck.some(d => d.id === skill.id) || hand.some(h => h.id === skill.id);
-                  return (
-                    <div key={`${skill.id}-${idx}`} className={`relative transition-all duration-300 h-[145px] md:h-[180px] lg:h-[210px] ${!isAvailable ? 'opacity-40 grayscale' : ''}`}>
+                {displayDeck.map((skill, idx) => (
+                    <div key={`${skill.id}-${idx}`} className="relative transition-all duration-300 h-[145px] md:h-[180px] lg:h-[210px]">
                       <div className="transform scale-[0.65] md:scale-[0.8] lg:scale-[0.95] origin-top">
                         <Card skill={skill} onClick={() => {}} disabled={false} mana={999} currentHaste={999} heroStats={heroStats} />
                       </div>
-                      {!isAvailable && (
-                        <div className="absolute top-1 right-1 px-1.5 py-0.5 bg-red-900/90 rounded text-[8px] font-black text-white uppercase tracking-wider shadow-lg">
-                          Used
-                        </div>
-                      )}
                     </div>
-                  );
-                })}
+                  ))}
               </div>
             </div>
             <button onClick={() => setIsDeckOverlayOpen(false)} className="mt-4 w-full bg-slate-800 hover:bg-slate-700 py-3 rounded-xl font-bold uppercase tracking-widest text-sm">Close Viewer</button>
           </div>
         </div>
-      )}
+        );
+      })()}
 
       {/* ABILITY LIST OVERLAY */}
       {isAbilityListOverlayOpen && (
@@ -1099,20 +1292,22 @@ const App: React.FC = () => {
               <button onClick={() => setIsShopOverlayOpen(false)} className="p-2 hover:bg-slate-800 rounded-full text-slate-400 hover:text-white"><X size={28} /></button>
             </div>
             <div className="flex-1 overflow-y-auto no-scrollbar pb-10">
-              {/* ライフ回復 */}
+              {/* サービス（ライフ回復 / カード削除） */}
               <div className="mb-4 px-2">
-                <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-2">Recovery</h3>
-                <div className="flex items-center gap-2">
+                <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-1">Services</h3>
+                <p className="text-xs text-slate-500 mb-2">いずれか１つのサービスだけが受けられます</p>
+                {/* ライフ回復 */}
+                <div className="flex items-center gap-2 mb-2">
                   <div className={`flex-1 p-3 rounded-lg border-2 flex items-center gap-3 ${
-                    hasBoughtLife ? 'opacity-50 border-slate-700' : 'border-red-500/50 bg-red-950/30'
+                    hasBoughtShopService ? 'opacity-50 border-slate-700' : 'border-red-500/50 bg-red-950/30'
                   }`}>
-                    <Heart className={`w-8 h-8 text-red-500 shrink-0 ${hasBoughtLife ? 'grayscale' : 'animate-pulse'}`} />
+                    <Heart className={`w-8 h-8 text-red-500 shrink-0 ${hasBoughtShopService ? 'grayscale' : 'animate-pulse'}`} />
                     <div className="flex-1 min-w-0">
                       <h4 className="font-bold text-slate-100 text-sm uppercase tracking-wide">Life +1</h4>
                       <p className="text-xs text-slate-400">ライフを1回復</p>
                     </div>
                   </div>
-                  {hasBoughtLife ? (
+                  {hasBoughtShopService ? (
                     <span className="text-sm text-green-500 font-bold px-4 shrink-0">SOLD</span>
                   ) : (
                     <button
@@ -1125,6 +1320,33 @@ const App: React.FC = () => {
                       }`}
                     >
                       <Coins size={16} /> {LIFE_RECOVERY_PRICE}G
+                    </button>
+                  )}
+                </div>
+                {/* カード削除 */}
+                <div className="flex items-center gap-2">
+                  <div className={`flex-1 p-3 rounded-lg border-2 flex items-center gap-3 ${
+                    hasBoughtShopService ? 'opacity-50 border-slate-700' : 'border-orange-500/50 bg-orange-950/30'
+                  }`}>
+                    <Trash2 className={`w-8 h-8 text-orange-500 shrink-0 ${hasBoughtShopService ? 'grayscale' : ''}`} />
+                    <div className="flex-1 min-w-0">
+                      <h4 className="font-bold text-slate-100 text-sm uppercase tracking-wide">Card Remove</h4>
+                      <p className="text-xs text-slate-400">カードを1枚削除</p>
+                    </div>
+                  </div>
+                  {hasBoughtShopService ? (
+                    <span className="text-sm text-green-500 font-bold px-4 shrink-0">SOLD</span>
+                  ) : (
+                    <button
+                      onClick={handleBuyCardRemove}
+                      disabled={gold < CARD_REMOVE_PRICE || permanentDeck.length <= 1}
+                      className={`flex items-center gap-1 px-4 py-3 rounded-lg text-sm font-black shrink-0 transition-all ${
+                        gold >= CARD_REMOVE_PRICE && permanentDeck.length > 1
+                          ? 'bg-yellow-600 hover:bg-yellow-500 text-white'
+                          : 'bg-slate-800 text-slate-500 cursor-not-allowed'
+                      }`}
+                    >
+                      <Coins size={16} /> {CARD_REMOVE_PRICE}G
                     </button>
                   )}
                 </div>
@@ -1213,6 +1435,36 @@ const App: React.FC = () => {
               </div>
             </div>
             <button onClick={() => setIsShopOverlayOpen(false)} className="mt-4 w-full bg-yellow-600 hover:bg-yellow-500 py-3 rounded-xl font-bold uppercase tracking-widest text-sm text-white">Close Shop</button>
+          </div>
+        </div>
+      )}
+
+      {/* CARD REMOVE OVERLAY */}
+      {isCardRemoveOverlayOpen && (
+        <div className="fixed inset-0 z-[110] bg-slate-900/80 backdrop-blur p-4 flex flex-col animate-in fade-in duration-300">
+          <div className="w-full max-w-sm md:max-w-md lg:max-w-lg mx-auto flex flex-col h-full">
+            <div className="flex justify-between items-center mb-6 pb-4 border-b border-slate-800">
+              <div className="flex items-center gap-3">
+                <Trash2 className="text-orange-400" size={24} />
+                <h2 className="font-fantasy text-2xl tracking-[0.2em] uppercase text-slate-100">Remove Card</h2>
+              </div>
+              <button onClick={() => { setIsCardRemoveOverlayOpen(false); setGold(prev => prev + CARD_REMOVE_PRICE); }} className="p-2 hover:bg-slate-800 rounded-full text-slate-400 hover:text-white"><X size={28} /></button>
+            </div>
+            <p className="text-center text-slate-400 text-sm mb-4">削除するカードを選択してください</p>
+            <div className="flex-1 overflow-y-auto no-scrollbar pb-10">
+              <div className="deck-grid">
+                {permanentDeck.map((skill, idx) => (
+                  <div key={`${skill.id}-${idx}`} className="relative transition-all duration-300 h-[145px] md:h-[180px] lg:h-[210px] cursor-pointer hover:scale-105" onClick={() => handleRemoveCard(skill.id)}>
+                    <div className="transform scale-[0.65] md:scale-[0.8] lg:scale-[0.95] origin-top">
+                      <Card skill={skill} onClick={() => {}} disabled={false} mana={999} currentHaste={999} heroStats={heroStats} />
+                    </div>
+                    <div className="absolute inset-0 bg-red-500/0 hover:bg-red-500/20 rounded-lg transition-colors flex items-center justify-center">
+                      <Trash2 className="text-red-500 opacity-0 hover:opacity-100 transition-opacity" size={32} />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
           </div>
         </div>
       )}
@@ -1628,16 +1880,16 @@ const App: React.FC = () => {
                         </div>
 
                         {/* デッキビュワーボタン・アビリティボタン（左下） */}
-                        <div className="absolute bottom-1 left-1 md:bottom-2 md:left-2 z-40 flex items-center gap-1">
-                          <button onClick={() => setIsDeckOverlayOpen(true)} className="flex items-center gap-1.5 px-2 py-1 bg-slate-900/90 backdrop-blur-md border border-indigo-500/40 rounded-lg text-[9px] font-black text-indigo-300 uppercase tracking-widest hover:bg-slate-800 transition-all shadow-xl">
-                            <Layers size={12} />
-                            <span>DECK</span>
-                            <span className="px-1.5 py-0.5 bg-indigo-600 rounded text-white text-[8px]">{deck.length}</span>
-                          </button>
+                        <div className="absolute bottom-1 left-1 md:bottom-2 md:left-2 z-40 flex flex-col gap-1">
                           <button onClick={() => setIsAbilityListOverlayOpen(true)} className="flex items-center gap-1.5 px-2 py-1 bg-slate-900/90 backdrop-blur-md border border-purple-500/40 rounded-lg text-[9px] font-black text-purple-300 uppercase tracking-widest hover:bg-slate-800 transition-all shadow-xl">
                             <Award size={12} />
                             <span>ABILITY</span>
                             <span className="px-1.5 py-0.5 bg-purple-600 rounded text-white text-[8px]">{passives.length}</span>
+                          </button>
+                          <button onClick={() => setIsDeckOverlayOpen(true)} className="flex items-center gap-1.5 px-2 py-1 bg-slate-900/90 backdrop-blur-md border border-indigo-500/40 rounded-lg text-[9px] font-black text-indigo-300 uppercase tracking-widest hover:bg-slate-800 transition-all shadow-xl">
+                            <Layers size={12} />
+                            <span>DECK</span>
+                            <span className="px-1.5 py-0.5 bg-indigo-600 rounded text-white text-[8px]">{deck.length}</span>
                           </button>
                         </div>
 
@@ -1681,16 +1933,16 @@ const App: React.FC = () => {
                 {gameState === 'CARD_REWARD' && (
                     <div className="relative flex flex-col items-center justify-center w-full h-full animate-in zoom-in duration-500">
                         {/* デッキビュワーボタン・アビリティボタン（左下）- バトル中と同じ */}
-                        <div className="absolute bottom-1 left-1 md:bottom-2 md:left-2 z-40 flex items-center gap-1">
-                          <button onClick={() => setIsDeckOverlayOpen(true)} className="flex items-center gap-1.5 px-2 py-1 bg-slate-900/90 backdrop-blur-md border border-indigo-500/40 rounded-lg text-[9px] font-black text-indigo-300 uppercase tracking-widest hover:bg-slate-800 transition-all shadow-xl">
-                            <Layers size={12} />
-                            <span>DECK</span>
-                            <span className="px-1.5 py-0.5 bg-indigo-600 rounded text-white text-[8px]">{permanentDeck.length}</span>
-                          </button>
+                        <div className="absolute bottom-1 left-1 md:bottom-2 md:left-2 z-40 flex flex-col gap-1">
                           <button onClick={() => setIsAbilityListOverlayOpen(true)} className="flex items-center gap-1.5 px-2 py-1 bg-slate-900/90 backdrop-blur-md border border-purple-500/40 rounded-lg text-[9px] font-black text-purple-300 uppercase tracking-widest hover:bg-slate-800 transition-all shadow-xl">
                             <Award size={12} />
                             <span>ABILITY</span>
                             <span className="px-1.5 py-0.5 bg-purple-600 rounded text-white text-[8px]">{passives.length}</span>
+                          </button>
+                          <button onClick={() => setIsDeckOverlayOpen(true)} className="flex items-center gap-1.5 px-2 py-1 bg-slate-900/90 backdrop-blur-md border border-indigo-500/40 rounded-lg text-[9px] font-black text-indigo-300 uppercase tracking-widest hover:bg-slate-800 transition-all shadow-xl">
+                            <Layers size={12} />
+                            <span>DECK</span>
+                            <span className="px-1.5 py-0.5 bg-indigo-600 rounded text-white text-[8px]">{permanentDeck.length}</span>
                           </button>
                         </div>
 
@@ -1725,16 +1977,16 @@ const App: React.FC = () => {
                 {gameState === 'ABILITY_REWARD' && (
                     <div className="relative flex flex-col items-center justify-center w-full h-full animate-in zoom-in duration-500">
                         {/* デッキビュワーボタン・アビリティボタン（左下）- バトル中と同じ */}
-                        <div className="absolute bottom-1 left-1 md:bottom-2 md:left-2 z-40 flex items-center gap-1">
-                          <button onClick={() => setIsDeckOverlayOpen(true)} className="flex items-center gap-1.5 px-2 py-1 bg-slate-900/90 backdrop-blur-md border border-indigo-500/40 rounded-lg text-[9px] font-black text-indigo-300 uppercase tracking-widest hover:bg-slate-800 transition-all shadow-xl">
-                            <Layers size={12} />
-                            <span>DECK</span>
-                            <span className="px-1.5 py-0.5 bg-indigo-600 rounded text-white text-[8px]">{permanentDeck.length}</span>
-                          </button>
+                        <div className="absolute bottom-1 left-1 md:bottom-2 md:left-2 z-40 flex flex-col gap-1">
                           <button onClick={() => setIsAbilityListOverlayOpen(true)} className="flex items-center gap-1.5 px-2 py-1 bg-slate-900/90 backdrop-blur-md border border-purple-500/40 rounded-lg text-[9px] font-black text-purple-300 uppercase tracking-widest hover:bg-slate-800 transition-all shadow-xl">
                             <Award size={12} />
                             <span>ABILITY</span>
                             <span className="px-1.5 py-0.5 bg-purple-600 rounded text-white text-[8px]">{passives.length}</span>
+                          </button>
+                          <button onClick={() => setIsDeckOverlayOpen(true)} className="flex items-center gap-1.5 px-2 py-1 bg-slate-900/90 backdrop-blur-md border border-indigo-500/40 rounded-lg text-[9px] font-black text-indigo-300 uppercase tracking-widest hover:bg-slate-800 transition-all shadow-xl">
+                            <Layers size={12} />
+                            <span>DECK</span>
+                            <span className="px-1.5 py-0.5 bg-indigo-600 rounded text-white text-[8px]">{permanentDeck.length}</span>
                           </button>
                         </div>
 
@@ -1769,16 +2021,16 @@ const App: React.FC = () => {
                 {gameState === 'BOSS_VICTORY' && (
                     <div className="relative flex flex-col items-center justify-center w-full h-full animate-in zoom-in duration-500">
                         {/* デッキビュワーボタン・アビリティボタン（左下）- バトル中と同じ */}
-                        <div className="absolute bottom-1 left-1 md:bottom-2 md:left-2 z-40 flex items-center gap-1">
-                          <button onClick={() => setIsDeckOverlayOpen(true)} className="flex items-center gap-1.5 px-2 py-1 bg-slate-900/90 backdrop-blur-md border border-indigo-500/40 rounded-lg text-[9px] font-black text-indigo-300 uppercase tracking-widest hover:bg-slate-800 transition-all shadow-xl">
-                            <Layers size={12} />
-                            <span>DECK</span>
-                            <span className="px-1.5 py-0.5 bg-indigo-600 rounded text-white text-[8px]">{permanentDeck.length}</span>
-                          </button>
+                        <div className="absolute bottom-1 left-1 md:bottom-2 md:left-2 z-40 flex flex-col gap-1">
                           <button onClick={() => setIsAbilityListOverlayOpen(true)} className="flex items-center gap-1.5 px-2 py-1 bg-slate-900/90 backdrop-blur-md border border-purple-500/40 rounded-lg text-[9px] font-black text-purple-300 uppercase tracking-widest hover:bg-slate-800 transition-all shadow-xl">
                             <Award size={12} />
                             <span>ABILITY</span>
                             <span className="px-1.5 py-0.5 bg-purple-600 rounded text-white text-[8px]">{passives.length}</span>
+                          </button>
+                          <button onClick={() => setIsDeckOverlayOpen(true)} className="flex items-center gap-1.5 px-2 py-1 bg-slate-900/90 backdrop-blur-md border border-indigo-500/40 rounded-lg text-[9px] font-black text-indigo-300 uppercase tracking-widest hover:bg-slate-800 transition-all shadow-xl">
+                            <Layers size={12} />
+                            <span>DECK</span>
+                            <span className="px-1.5 py-0.5 bg-indigo-600 rounded text-white text-[8px]">{permanentDeck.length}</span>
                           </button>
                         </div>
 
@@ -1807,16 +2059,16 @@ const App: React.FC = () => {
                 {gameState === 'SHOP' && (
                     <div className="relative flex flex-col items-center justify-center w-full h-full animate-in zoom-in duration-500">
                         {/* デッキビュワーボタン・アビリティボタン（左下）- バトル中と同じ */}
-                        <div className="absolute bottom-1 left-1 md:bottom-2 md:left-2 z-40 flex items-center gap-1">
-                          <button onClick={() => setIsDeckOverlayOpen(true)} className="flex items-center gap-1.5 px-2 py-1 bg-slate-900/90 backdrop-blur-md border border-indigo-500/40 rounded-lg text-[9px] font-black text-indigo-300 uppercase tracking-widest hover:bg-slate-800 transition-all shadow-xl">
-                            <Layers size={12} />
-                            <span>DECK</span>
-                            <span className="px-1.5 py-0.5 bg-indigo-600 rounded text-white text-[8px]">{permanentDeck.length}</span>
-                          </button>
+                        <div className="absolute bottom-1 left-1 md:bottom-2 md:left-2 z-40 flex flex-col gap-1">
                           <button onClick={() => setIsAbilityListOverlayOpen(true)} className="flex items-center gap-1.5 px-2 py-1 bg-slate-900/90 backdrop-blur-md border border-purple-500/40 rounded-lg text-[9px] font-black text-purple-300 uppercase tracking-widest hover:bg-slate-800 transition-all shadow-xl">
                             <Award size={12} />
                             <span>ABILITY</span>
                             <span className="px-1.5 py-0.5 bg-purple-600 rounded text-white text-[8px]">{passives.length}</span>
+                          </button>
+                          <button onClick={() => setIsDeckOverlayOpen(true)} className="flex items-center gap-1.5 px-2 py-1 bg-slate-900/90 backdrop-blur-md border border-indigo-500/40 rounded-lg text-[9px] font-black text-indigo-300 uppercase tracking-widest hover:bg-slate-800 transition-all shadow-xl">
+                            <Layers size={12} />
+                            <span>DECK</span>
+                            <span className="px-1.5 py-0.5 bg-indigo-600 rounded text-white text-[8px]">{permanentDeck.length}</span>
                           </button>
                         </div>
 
@@ -1887,10 +2139,12 @@ const App: React.FC = () => {
 
                         {/* ゲージ行 */}
                         <div className="flex items-center gap-2">
-                          <div className="flex items-center gap-1 w-14">
-                            <Zap className="w-4 h-4 text-slate-300" />
-                            <span className="text-[0.5rem] font-black text-slate-300">HASTE</span>
-                          </div>
+                          <Tooltip content={"ヘイストが最大になるとライフが減る。\nライフが減ると最大枚数までカードを引く。"}>
+                            <div className="flex items-center gap-1 w-14 cursor-pointer select-none hover:bg-slate-800/50 rounded px-1 -mx-1 transition-colors">
+                              <Zap className="w-4 h-4 text-slate-300 pointer-events-none" />
+                              <span className="text-[0.5rem] font-black text-slate-300 pointer-events-none">HASTE</span>
+                            </div>
+                          </Tooltip>
                           <div className="flex-1 h-6 bg-slate-950 rounded-l border border-slate-700 relative overflow-hidden">
                             {/* 10区切りグリッド */}
                             <div className="absolute inset-0 flex z-10">
@@ -1926,10 +2180,12 @@ const App: React.FC = () => {
 
                       {/* MANAゲージ */}
                       <div className="flex items-center gap-2">
-                        <div className="flex items-center gap-1 w-14">
-                          <Hexagon className="w-4 h-4 text-blue-400" />
-                          <span className="text-[0.5rem] font-black text-blue-400">MANA</span>
-                        </div>
+                        <Tooltip content={"一部のカードの使用時に消費する。\n戦闘終了時に回復する。\n上限を超えて回復は出来ない。"}>
+                          <div className="flex items-center gap-1 w-14 cursor-pointer select-none hover:bg-slate-800/50 rounded px-1 -mx-1 transition-colors">
+                            <Hexagon className="w-4 h-4 text-blue-400 pointer-events-none" />
+                            <span className="text-[0.5rem] font-black text-blue-400 pointer-events-none">MANA</span>
+                          </div>
+                        </Tooltip>
                         <div className="flex-1 h-6 bg-slate-950 rounded border border-slate-700 relative overflow-hidden">
                           <div
                             className="h-full bg-gradient-to-r from-blue-600 to-blue-400 transition-all duration-300"
@@ -2007,8 +2263,32 @@ const App: React.FC = () => {
 
                     <div className="flex flex-col gap-2 md:gap-4 flex-1 min-h-[15rem]">
                         {hand.length > 0 ? (
-                            <div className="flex justify-center gap-1.5 md:gap-3 animate-in slide-in-from-bottom-4 overflow-x-auto pb-2 px-2 scrollbar-thin scrollbar-thumb-slate-600 scrollbar-track-slate-800 min-h-[14rem]">
-                                {hand.map((item, idx) => <div key={`hand-${item.id}-${idx}`} className="flex-shrink-0"><Card skill={item} onClick={() => selectSkill(item)} disabled={isTargetMet || isMonsterAttacking || turnResetMessage || isShuffling} mana={mana} currentHaste={currentHaste} heroStats={heroStats} physicalMultiplier={battleEvent.physicalMultiplier} magicMultiplier={battleEvent.magicMultiplier} effectsDisabled={isEffectDisabled(item)} lastCardWasPhysical={wasLastCardPhysical()} deckSlashCount={deckSlashCount} enemyDamageTaken={enemyDamageTaken} /></div>)}
+                            <div
+                                ref={handContainerRef}
+                                {...handContainerProps}
+                                className="overflow-x-auto pb-2 scrollbar-thin scrollbar-thumb-slate-600 scrollbar-track-slate-800 min-h-[14rem] select-none"
+                            >
+                                <div className="flex justify-center gap-1.5 md:gap-3 animate-in slide-in-from-bottom-4 min-w-fit px-8">
+                                {hand.map((item, idx) => (
+                                    <div key={`hand-${item.id}-${idx}`} className="flex-shrink-0">
+                                        <Card
+                                            skill={item}
+                                            onClick={() => { if (!shouldPreventClick()) selectSkill(item); }}
+                                            disabled={isTargetMet || isMonsterAttacking || turnResetMessage || isShuffling}
+                                            mana={mana}
+                                            currentHaste={currentHaste}
+                                            heroStats={heroStats}
+                                            physicalMultiplier={battleEvent.physicalMultiplier}
+                                            magicMultiplier={battleEvent.magicMultiplier}
+                                            effectsDisabled={isEffectDisabled(item)}
+                                            lastCardWasPhysical={wasLastCardPhysical()}
+                                            deckSlashCount={deckSlashCount}
+                                            enemyDamageTaken={enemyDamageTaken}
+                                            physicalHasteReduction={physicalHasteReduction}
+                                        />
+                                    </div>
+                                ))}
+                                </div>
                             </div>
                         ) : (
                             <div className="flex-1 flex items-center justify-center text-center p-4 min-h-[14rem]">
@@ -2042,7 +2322,7 @@ const App: React.FC = () => {
                       </button>
                       {/* ターン終了ボタン */}
                       <button
-                        onClick={() => handleEnemyAttack(stack, deck)}
+                        onClick={() => handleEnemyAttack(stack, deck, hand)}
                         disabled={isTargetMet || isMonsterAttacking || turnResetMessage}
                         className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border-2 transition-all ${
                           !isTargetMet && !isMonsterAttacking && !turnResetMessage

@@ -7,10 +7,20 @@ export type EffectType =
   | 'poison'               // 毒付与
   | 'permanent_power_up'   // 永続パワーアップ
   | 'deck_slash_bonus'     // 山札のスラッシュ枚数ボーナス
+  | 'discard_slash_damage' // 山札・手札のスラッシュを捨ててダメージ
   | 'add_buff'             // バフを付与
   | 'stat_buff'            // ステータスバフ（戦闘中）
   | 'physical_chain_haste' // 物理チェーン時ヘイスト減少
-  | 'enemy_damage_taken';  // 敵の減少HP分のダメージ
+  | 'physical_chain_haste_draw' // 物理チェーン時ヘイスト減少＋ドロー
+  | 'enemy_damage_taken'   // 敵の減少HP分のダメージ
+  | 'draw'                 // カードをドロー（上限超過可能）
+  | 'mana_recovery'        // マナ回復
+  | 'mana_consume_damage'  // マナを全消費してダメージ
+  | 'discard_magic_mana'   // 捨て札の魔法カード×値のマナ回復＋ドロー
+  | 'add_copy_to_deck'     // カードのコピーをデッキに追加
+  | 'discard_redraw'       // 手札を全て捨てて捨てた数+1ドロー
+  | 'magic_lifesteal'      // 魔法ダメージ分マナ回復
+  | 'magic_count_bonus';   // 使用した魔法カード枚数×APボーナス
 
 // バフタイプ
 export type BuffType =
@@ -58,6 +68,7 @@ export interface EffectParams {
   duration?: 'turn' | 'battle' | 'permanent';  // 持続時間
   targetName?: string;      // 対象名（スラッシュなど）
   buffId?: string;          // バフ定義ID（BUFFS参照）
+  drawValue?: number;       // ドロー枚数
 }
 
 export interface SkillEffect {
@@ -117,7 +128,7 @@ export interface PassiveEffect {
   name: string;
   icon: string;
   description: string;
-  type: 'score_flat' | 'capacity_boost' | 'score_mult' | 'adjacency_to_mult' | 'sauce_mult_add' | 'max_life_boost' | 'flat_damage_bonus' | 'category_buff' | 'ad_boost' | 'ap_boost' | 'ap_mana_boost' | 'physical_haste_reduction' | 'hand_size_boost' | 'gold_bonus';
+  type: 'score_flat' | 'capacity_boost' | 'score_mult' | 'adjacency_to_mult' | 'sauce_mult_add' | 'max_life_boost' | 'flat_damage_bonus' | 'category_buff' | 'ad_boost' | 'ap_boost' | 'ap_mana_boost' | 'physical_haste_reduction' | 'hand_size_boost' | 'gold_bonus' | 'base_damage_mult' | 'mana_to_haste';
   value: number;
   value2?: number;  // 複合効果用（ap_mana_boostのマナ値など）
   rarity: Rarity;
@@ -138,4 +149,6 @@ export interface CardProps {
   // 能力ダメージ計算用
   deckSlashCount?: number;        // デッキ内のスラッシュ枚数
   enemyDamageTaken?: number;      // 敵の減少HP（最大HP - 現在HP）
+  // パッシブ効果
+  physicalHasteReduction?: number; // 物理のみカードのヘイスト削減率（0-100）
 }
