@@ -101,7 +101,7 @@ export interface Enemy {
   trait?: BattleEvent;
 }
 
-export type GameState = 'START' | 'PLAYING' | 'LEVEL_CLEAR' | 'BOSS_VICTORY' | 'GAME_OVER' | 'CARD_REWARD' | 'SHOP' | 'BESTIARY';
+export type GameState = 'START' | 'PLAYING' | 'LEVEL_CLEAR' | 'BOSS_VICTORY' | 'GAME_OVER' | 'CARD_REWARD' | 'SHOP';
 
 export interface PassiveEffect {
   id: string;
