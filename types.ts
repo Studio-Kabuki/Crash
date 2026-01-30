@@ -1,5 +1,42 @@
 
-export type EffectType = 'none' | 'adjacency' | 'global_mult' | 'count_bonus' | 'positional' | 'mana_refund' | 'next_action_mult' | 'next_action_double' | 'poison' | 'deck_count_bonus' | 'lifesteal_mana' | 'permanent_stack' | 'prev_turn_magic_bonus' | 'combo_skip' | 'adjacency_physical_skip';
+// 効果タイプ
+export type EffectType =
+  | 'none'
+  | 'mana_restore'         // マナ回復
+  | 'lifesteal'            // 与ダメージ分マナ回復
+  | 'poison'               // 毒付与
+  | 'permanent_power_up'   // 永続パワーアップ
+  | 'deck_slash_bonus'     // 山札のスラッシュ枚数ボーナス
+  | 'add_buff'             // バフを付与
+  | 'stat_buff';           // ステータスバフ（戦闘中）
+
+// バフタイプ
+export type BuffType =
+  | 'charge'       // ためる（次のアタックを複数回発動）
+  | 'stat_up'      // ステータスアップ
+  | 'stat_down';   // ステータスダウン
+
+// プレイヤーのバフ/デバフ
+export interface PlayerBuff {
+  id: string;
+  type: BuffType;
+  name: string;
+  icon: string;
+  description: string;
+  value: number;           // 効果量（回数、ステータス増加量など）
+  stat?: 'ad' | 'ap' | 'sp' | 'mp';  // ステータス系バフの対象
+}
+
+// 効果の発動タイミング
+export type EffectTrigger =
+  | 'on_use'        // カード使用時
+  | 'on_damage'     // ダメージ発生時
+  | 'turn_end'      // ターン終了時
+  | 'battle_start'; // 戦闘開始時
+
+// カード分類
+export type CardType = 'attack' | 'support';
+
 export type Rarity = 'SSR' | 'R' | 'C';
 
 // 主人公のパラメータ
@@ -10,28 +47,38 @@ export interface HeroStats {
   mp: number;  // マナ
 }
 
+// 効果パラメータ（柔軟な構造）
+export interface EffectParams {
+  value?: number;           // 汎用値
+  count?: number;           // 回数
+  stat?: 'ad' | 'ap' | 'sp' | 'mp';  // 対象ステータス
+  duration?: 'turn' | 'battle' | 'permanent';  // 持続時間
+  targetName?: string;      // 対象名（スラッシュなど）
+  buffId?: string;          // バフ定義ID（BUFFS参照）
+}
+
 export interface SkillEffect {
   type: EffectType;
+  trigger: EffectTrigger;
   description: string;
-  value: number; // Damage bonus or Multiplier
-  targetName?: string; // For synergy (e.g., "Fireball")
-  position?: number; // For positional bonus (e.g., "last slot")
+  params: EffectParams;
 }
 
 export interface Skill {
   id: string;
   name: string;
   icon: string;
-  power: number;
+  cardType: CardType;     // アタック or サポート
+  adRatio: number;        // 物理係数（%）
+  apRatio: number;        // 魔法係数（%）
   manaCost: number;
-  delay: number; // ヘイスト消費量（ディレイ）
+  delay: number;          // ヘイスト消費量（ディレイ）
   color: string;
   borderColor: string;
   heightClass: string;
   widthClass: string;
   borderRadiusClass: string;
   effect?: SkillEffect;
-  category: 'physical' | 'magic' | 'buff';
   rarity: Rarity;
 }
 
@@ -39,10 +86,9 @@ export interface BattleEvent {
   id: string;
   title: string;
   description: string;
-  targetCategory?: 'physical' | 'magic' | 'buff';
-  targetSkill?: string;
-  multiplier: number;
-  disableEffects?: boolean;
+  physicalMultiplier: number;  // 物理ダメージ倍率（1.0 = 等倍）
+  magicMultiplier: number;     // 魔法ダメージ倍率（1.0 = 等倍）
+  disableSupportEffects?: boolean;  // サポートカードの効果を無効化
   type: 'positive' | 'negative' | 'neutral';
 }
 
@@ -52,7 +98,7 @@ export interface Enemy {
   baseHP: number;
   minFloor: number;
   maxFloor: number;
-  trait?: BattleEvent; // 敵固有の場の効果
+  trait?: BattleEvent;
 }
 
 export type GameState = 'START' | 'PLAYING' | 'LEVEL_CLEAR' | 'BOSS_VICTORY' | 'GAME_OVER' | 'CARD_REWARD' | 'SHOP' | 'BESTIARY';
@@ -62,9 +108,8 @@ export interface PassiveEffect {
   name: string;
   icon: string;
   description: string;
-  type: 'score_flat' | 'capacity_boost' | 'score_mult' | 'category_buff' | 'adjacency_to_mult' | 'sauce_mult_add' | 'max_life_boost' | 'flat_damage_bonus' | 'combo_skip_physical';
+  type: 'score_flat' | 'capacity_boost' | 'score_mult' | 'adjacency_to_mult' | 'sauce_mult_add' | 'max_life_boost' | 'flat_damage_bonus';
   value: number;
-  targetCategory?: 'physical' | 'magic' | 'buff';
   rarity: Rarity;
 }
 
@@ -73,7 +118,8 @@ export interface CardProps {
   onClick: () => void;
   disabled: boolean;
   mana: number;
-  marketModifier?: number;
+  heroStats: HeroStats;
+  physicalMultiplier?: number;
+  magicMultiplier?: number;
   effectsDisabled?: boolean;
-  magicUsedLastTurn?: boolean;
 }

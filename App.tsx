@@ -1,8 +1,8 @@
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { GameState, Skill, PassiveEffect, BattleEvent, Enemy, Rarity, HeroStats } from './types';
+import { GameState, Skill, PassiveEffect, BattleEvent, Enemy, Rarity, HeroStats, PlayerBuff } from './types';
 import { PASSIVE_POOL, INITIAL_MANA, INITIAL_LIFE, INITIAL_HERO_STATS } from './constants';
-import { loadGameData, GameData, DEFAULT_EVENT, createSkillWithId } from './utils/dataLoader';
+import { loadGameData, GameData, DEFAULT_EVENT, createSkillWithId, BUFFS, BuffDefinition } from './utils/dataLoader';
 import { Card } from './components/Card';
 import {
   RotateCcw, Swords, Skull, Zap, ArrowRight, ScrollText,
@@ -61,9 +61,11 @@ const App: React.FC = () => {
   const [hasBoughtLife, setHasBoughtLife] = useState<boolean>(false);
   const [hasBoughtPassive, setHasBoughtPassive] = useState<boolean>(false);
 
-  // Status Effects & Passive Trackers
+  // Status Effects
   const [isEnemyPoisoned, setIsEnemyPoisoned] = useState<boolean>(false);
-  const [physicalAttackCounter, setPhysicalAttackCounter] = useState<number>(0);
+
+  // プレイヤーバフ/デバフ
+  const [playerBuffs, setPlayerBuffs] = useState<PlayerBuff[]>([]);
 
   // ヘイスト（行動力）システム
   const [currentHaste, setCurrentHaste] = useState<number>(INITIAL_HERO_STATS.sp);
@@ -103,6 +105,32 @@ const App: React.FC = () => {
   }, [passives]);
 
   const generateId = () => Math.random().toString(36).substr(2, 9);
+
+  // バフを付与する関数
+  const addBuff = (buffId: string, customValue?: number) => {
+    const buffDef = BUFFS[buffId];
+    if (!buffDef) {
+      console.warn(`Buff definition not found: ${buffId}`);
+      return;
+    }
+
+    const newBuff: PlayerBuff = {
+      id: generateId(),
+      type: buffDef.type,
+      name: buffDef.name,
+      icon: buffDef.icon,
+      description: buffDef.description,
+      value: customValue ?? buffDef.defaultValue,
+      stat: buffDef.stat
+    };
+
+    setPlayerBuffs(prev => [...prev, newBuff]);
+  };
+
+  // 戦闘終了時にバフをリセット
+  const clearBattleBuffs = () => {
+    setPlayerBuffs([]);
+  };
 
   // CSVからゲームデータをロード
   useEffect(() => {
@@ -198,8 +226,8 @@ const App: React.FC = () => {
     setGameState('PLAYING');
     setIsDeckOverlayOpen(false);
     setIsEnemyPoisoned(false);
-    setPhysicalAttackCounter(0);
     setCurrentHaste(INITIAL_HERO_STATS.sp);
+    setPlayerBuffs([]);
 
     const initialEnemy = getEnemyForLevel(1);
     setCurrentEnemy(initialEnemy);
@@ -222,8 +250,8 @@ const App: React.FC = () => {
         setGameState('PLAYING');
         setIsDeckOverlayOpen(false);
         setIsEnemyPoisoned(false);
-        setPhysicalAttackCounter(0);
         setCurrentHaste(heroStats.sp);
+        setPlayerBuffs([]);
 
         const battleDeck = shuffle(sourceDeck);
         setDeck(battleDeck);
@@ -333,56 +361,41 @@ const App: React.FC = () => {
     }
   };
 
+  // サポートカードの効果が無効化されているかチェック
   const isEffectDisabled = (skill: Skill) => {
-    if (!battleEvent.disableEffects) return false;
-    if (battleEvent.targetCategory && skill.category === battleEvent.targetCategory) return true;
-    if (battleEvent.targetSkill && skill.name === battleEvent.targetSkill) return true;
-    return false;
+    if (!battleEvent.disableSupportEffects) return false;
+    return skill.cardType === 'support';  // サポートカードのみ無効化
   };
 
-  const getSkillMarketModifier = (skill: Skill) => {
-    if (battleEvent.targetCategory && skill.category === battleEvent.targetCategory) return battleEvent.multiplier;
-    if (battleEvent.targetSkill && skill.name === battleEvent.targetSkill) return battleEvent.multiplier;
-    return 1;
+  // スキルの基本ダメージを計算（物理/魔法別々に倍率適用）
+  const getSkillBaseDamage = (s: Skill) => {
+    const physicalDmg = Math.floor(heroStats.ad * s.adRatio / 100 * battleEvent.physicalMultiplier);
+    const magicDmg = Math.floor(heroStats.ap * s.apRatio / 100 * battleEvent.magicMultiplier);
+    return physicalDmg + magicDmg;
   };
 
-  const calculateComboPower = (skills: Skill[]) => {
+  // chargeバフがあるかチェック（ダメージ表示用）
+  const getChargeMultiplier = (): number => {
+    const chargeBuff = playerBuffs.find(b => b.type === 'charge');
+    return chargeBuff ? chargeBuff.value : 1;
+  };
+
+  const calculateComboPower = (skills: Skill[], chargeMultiplier: number = 1) => {
     let basePower = 0;
-    let nextActionMult = 1.0;
-    let isDoubleActive = false;
     let totalMultiplier = 1.0;
 
-    skills.forEach((s, i) => {
-        let p = s.power;
-        if (!isEffectDisabled(s)) {
-          if (s.effect?.type === 'deck_count_bonus') {
-            // ここを完全一致から部分一致（includes）に変更
-            const slashCount = deck.filter(d => d.name.includes('スラッシュ')).length;
-            p += (slashCount * s.effect.value);
-          }
-          if (s.effect?.type === 'prev_turn_magic_bonus') {
-            const prevSkill = i > 0 ? skills[i - 1] : null;
-            if (prevSkill && prevSkill.category === 'magic') {
-              p *= s.effect.value;
-            }
+    skills.forEach((s) => {
+        let p = getSkillBaseDamage(s);
+        if (!isEffectDisabled(s) && s.effect) {
+          if (s.effect.type === 'deck_slash_bonus') {
+            const targetName = s.effect.params.targetName || 'スラッシュ';
+            const slashCount = deck.filter(d => d.name.includes(targetName)).length;
+            p += (slashCount * (s.effect.params.value || 0));
           }
         }
-        p *= nextActionMult;
-        p *= getSkillMarketModifier(s);
-        passives.forEach(pass => {
-            if (pass.type === 'category_buff' && pass.targetCategory === s.category) p += pass.value;
-        });
-        if (isDoubleActive && s.category !== 'buff') p *= 2;
+
+        // アタックカードならchargeバフの倍率を適用（最後のアタックカードにのみ）
         basePower += p;
-        if (s.effect && !isEffectDisabled(s)) {
-            if (s.effect.type === 'next_action_mult') nextActionMult = s.effect.value;
-            else nextActionMult = 1.0;
-            if (s.effect.type === 'next_action_double') isDoubleActive = true;
-            else if (s.category !== 'buff') isDoubleActive = false;
-        } else if (s.category !== 'buff') {
-            nextActionMult = 1.0;
-            isDoubleActive = false;
-        }
     });
 
     passives.forEach(p => { if (p.type === 'score_mult') totalMultiplier += p.value; });
@@ -435,7 +448,7 @@ const App: React.FC = () => {
 
     // UIボタンからの精神統一はヘイストを10消費
     const restDelay = 10;
-    const dummySkill: Skill = { id: 'rest', name: '精神統一', icon: '', power: 0, manaCost: 0, delay: restDelay, category: 'buff', rarity: 'C', color: '', borderColor: '', borderRadiusClass: '', heightClass: '', widthClass: '' };
+    const dummySkill: Skill = { id: 'rest', name: '精神統一', icon: '', cardType: 'support', adRatio: 0, apRatio: 0, manaCost: 0, delay: restDelay, rarity: 'C', color: '', borderColor: '', borderRadiusClass: '', heightClass: '', widthClass: '' };
     const newStack = [...stack, dummySkill];
     setStack(newStack);
 
@@ -462,12 +475,8 @@ const App: React.FC = () => {
 
     setDeck(newDeck);
 
-    // ディレイスキップ判定（combo_skip効果またはadjacency_physical_skip条件）
-    const isDelaySkip = skill.effect?.type === 'combo_skip' ||
-      (skill.effect?.type === 'adjacency_physical_skip' && stack.length > 0 && stack[stack.length - 1].category === 'physical');
-
-    // ディレイ計算（スキップなら0、それ以外はスキルのディレイ値）
-    const actualDelay = isDelaySkip ? 0 : Math.round(skill.delay);
+    // ディレイ計算（スキルのdelay値をそのまま使用）
+    const actualDelay = Math.round(skill.delay);
 
     setTimeout(() => {
         setIsMonsterShaking(true);
@@ -483,8 +492,20 @@ const App: React.FC = () => {
 
         const newStack = [...stack, skill];
 
+        // アタックカードの場合、すべてのchargeバフを消費して合計発動回数を計算
+        let repeatCount = 1;
+        if (skill.cardType === 'attack') {
+          const chargeBuffs = playerBuffs.filter(b => b.type === 'charge');
+          if (chargeBuffs.length > 0) {
+            // すべてのchargeバフのvalueを合計
+            repeatCount = chargeBuffs.reduce((sum, buff) => sum + buff.value, 0);
+            // すべてのchargeバフを消費
+            setPlayerBuffs(prev => prev.filter(b => b.type !== 'charge'));
+          }
+        }
+
         const newTotalPower = calculateComboPower(newStack);
-        let damageDealt = newTotalPower - currentComboPower;
+        let damageDealt = (newTotalPower - currentComboPower) * repeatCount;
         const poisonDmg = isEnemyPoisoned ? 30 : 0;
         const finalDamage = damageDealt + poisonDmg;
 
@@ -502,27 +523,27 @@ const App: React.FC = () => {
         setTimeout(() => setFloatingDamages(prev => prev.filter(d => d.id !== damageId)), 1000);
 
         if (skill.effect && !isEffectDisabled(skill)) {
-           let doubleActive = false;
-           let checkNextDouble = false;
-           stack.forEach(s => {
-               if (s.effect?.type === 'next_action_double' && !isEffectDisabled(s)) checkNextDouble = true;
-               else if (s.category !== 'buff') checkNextDouble = false;
-           });
-           doubleActive = checkNextDouble && skill.category !== 'buff';
-           const executionCount = doubleActive ? 2 : 1;
-
-           for(let i=0; i<executionCount; i++) {
-              if (skill.effect.type === 'lifesteal_mana') {
-                 const healAmount = executionCount === 2 ? Math.floor(finalDamage / 2) : finalDamage;
-                 setMana(prev => Math.min(maxMana, prev + healAmount));
-                 const mhId = generateId();
-                 setFloatingDamages(prev => [...prev, { id: mhId, value: healAmount, isMana: true }]);
-                 setTimeout(() => setFloatingDamages(p => p.filter(d => d.id !== mhId)), 1000);
-              }
-              if (skill.effect.type === 'poison') setIsEnemyPoisoned(true);
-              if (skill.effect.type === 'permanent_stack') {
-                setPermanentDeck(prev => prev.map(p => p.id === skill.id ? { ...p, power: p.power + (skill.effect?.value || 0) } : p));
-              }
+           if (skill.effect.type === 'lifesteal') {
+              setMana(prev => Math.min(maxMana, prev + finalDamage));
+              const mhId = generateId();
+              setFloatingDamages(prev => [...prev, { id: mhId, value: finalDamage, isMana: true }]);
+              setTimeout(() => setFloatingDamages(p => p.filter(d => d.id !== mhId)), 1000);
+           }
+           if (skill.effect.type === 'poison') setIsEnemyPoisoned(true);
+           if (skill.effect.type === 'add_buff' && skill.effect.params.buffId) {
+             addBuff(skill.effect.params.buffId, skill.effect.params.value);
+           }
+           if (skill.effect.type === 'permanent_power_up') {
+             // adRatio > 0ならadRatioを増加、そうでなければapRatioを増加
+             const ratioBonus = skill.effect.params.value || 0;
+             setPermanentDeck(prev => prev.map(p => {
+               if (p.id !== skill.id) return p;
+               if (skill.adRatio > 0) {
+                 return { ...p, adRatio: p.adRatio + ratioBonus };
+               } else {
+                 return { ...p, apRatio: p.apRatio + ratioBonus };
+               }
+             }));
            }
         }
 
@@ -637,7 +658,8 @@ const App: React.FC = () => {
                       <SafeImage src={skill.icon} alt={skill.name} className="w-10 h-10 object-contain mb-2 group-hover:scale-110 transition-transform" />
                       <span className="text-[9px] font-bold text-slate-300 text-center uppercase tracking-tighter leading-tight line-clamp-1">{skill.name}</span>
                       <div className="mt-1 flex items-center gap-1">
-                        <span className="text-[7px] font-black text-indigo-400">ATK:{skill.power}</span>
+                        {skill.adRatio > 0 && <span className="text-[7px] font-black text-orange-400">{Math.floor(heroStats.ad * skill.adRatio / 100)}</span>}
+                        {skill.apRatio > 0 && <span className="text-[7px] font-black text-indigo-400">{Math.floor(heroStats.ap * skill.apRatio / 100)}</span>}
                         <span className="text-[7px] font-black text-blue-400">-{skill.manaCost}M</span>
                       </div>
                       {!isAvailable && <div className="absolute bottom-1 right-1 px-1 bg-red-900/80 rounded text-[6px] font-black text-white uppercase tracking-tighter">Used</div>}
@@ -715,24 +737,18 @@ const App: React.FC = () => {
                             </div>
                           </div>
                         )}
-                        <div className="absolute top-1 right-1 md:top-2 md:right-2 z-40 animate-in fade-in slide-in-from-right-4 text-center">
-                          <div className={`bg-slate-900/90 backdrop-blur-md shadow-xl rounded border px-2.5 py-1.5 flex flex-col items-center ${isTargetMet ? 'border-green-500' : 'border-slate-800'}`}>
-                            <span className="text-[0.375rem] font-black uppercase tracking-widest text-indigo-400 leading-none mb-1">TOTAL DMG</span>
-                            <span className={`text-[1.25rem] font-black font-fantasy leading-none ${isTargetMet ? 'text-green-400' : 'text-white'}`}>{currentComboPower}</span>
-                            <div className="w-full h-px bg-slate-800 my-1"></div>
-                            <span className="text-[0.375rem] font-black uppercase tracking-widest text-yellow-500 leading-none mb-1">HASTE</span>
-                            <div className={`text-[0.625rem] font-black leading-none ${isTargetMet ? 'text-green-400' : 'text-yellow-400'}`}>{isTargetMet ? "KILLED" : `${currentHaste}/${maxHaste}`}</div>
-                          </div>
-                        </div>
-
-                        <div className="absolute top-1 left-1 flex flex-col gap-1 z-40">
-                            <div className="px-2 py-0.5 bg-slate-900/80 border border-slate-700 rounded text-[0.5rem] font-black uppercase tracking-[0.1em] text-slate-400 shadow-lg">{currentEnemy.name}</div>
+                        {/* 山札表示（左上） */}
+                        <div className="absolute top-1 left-1 z-40">
                             <div className="flex items-center gap-1.5 px-2 py-0.5 bg-indigo-950/80 border border-indigo-700/50 rounded text-[0.5rem] font-black uppercase tracking-[0.1em] text-indigo-300 shadow-lg"><Layers className="w-[0.625rem] h-[0.625rem]" /><span>山札: {deck.length}</span></div>
                         </div>
 
-                        <div className="absolute top-11 md:top-14 w-40 md:w-64 h-3 md:h-4 bg-slate-950 rounded border border-slate-800 shadow-2xl overflow-hidden z-20">
-                            <div className={`h-full transition-all duration-500 ${enemyHealth / currentEnemy.baseHP > 0.5 ? 'bg-gradient-to-r from-green-600 to-green-400' : 'bg-gradient-to-r from-red-600 to-red-400'}`} style={{ width: `${(enemyHealth / currentEnemy.baseHP) * 100}%` }}></div>
-                            <span className="absolute inset-0 flex items-center justify-center text-[1rem] font-black text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)] uppercase tracking-widest">HP {Math.ceil(enemyHealth)} / {currentEnemy.baseHP}</span>
+                        {/* 敵名 + HPゲージ（中央上部） */}
+                        <div className="absolute top-2 left-1/2 transform -translate-x-1/2 flex flex-col items-center gap-1 z-20">
+                            <div className="px-3 py-0.5 bg-slate-900/90 border border-slate-700 rounded text-[0.625rem] font-black uppercase tracking-[0.1em] text-slate-300 shadow-lg">{currentEnemy.name}</div>
+                            <div className="w-40 md:w-64 h-4 md:h-5 bg-slate-950 rounded border border-slate-800 shadow-2xl overflow-hidden">
+                                <div className={`h-full transition-all duration-500 ${enemyHealth / currentEnemy.baseHP > 0.5 ? 'bg-gradient-to-r from-green-600 to-green-400' : 'bg-gradient-to-r from-red-600 to-red-400'}`} style={{ width: `${(enemyHealth / currentEnemy.baseHP) * 100}%` }}></div>
+                                <span className="absolute inset-0 flex items-center justify-center text-[0.75rem] font-black text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)] uppercase tracking-widest">HP {Math.ceil(enemyHealth)} / {currentEnemy.baseHP}</span>
+                            </div>
                         </div>
 
                         {/* 主人公パラメータ表示 */}
@@ -775,91 +791,101 @@ const App: React.FC = () => {
                 )}
 
                 {gameState === 'SHOP' && (
-                    <div className="flex flex-col items-center justify-center w-full animate-in zoom-in duration-500 pt-4">
-                        <ShoppingCart className="text-yellow-500 mb-2 opacity-30" size={60} />
-                        <h2 className="text-2xl font-fantasy font-black text-yellow-400 tracking-[0.2em] uppercase mb-4 text-shadow-lg">Mysterious Shop</h2>
-                        
-                        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7 gap-3 w-full px-4 overflow-y-auto no-scrollbar max-h-[450px] pb-10">
+                    <div className="flex flex-col items-center w-full animate-in zoom-in duration-500 pt-2 overflow-y-auto no-scrollbar max-h-[500px]">
+                        <ShoppingCart className="text-yellow-500 mb-1 opacity-30" size={32} />
+                        <h2 className="text-lg font-fantasy font-black text-yellow-400 tracking-[0.15em] uppercase mb-3 text-shadow-lg">Shop</h2>
+
+                        {/* 一段目：ライフとアビリティ */}
+                        <div className="flex justify-center gap-3 w-full px-4 mb-3">
                             {/* Recover Life Option */}
-                            <div className="bg-slate-900/60 border-2 border-slate-800 rounded-xl p-3 flex flex-col items-center justify-between group hover:border-red-500/50 transition-all relative h-[180px]">
-                                <Heart className={`text-red-500 ${hasBoughtLife ? 'grayscale opacity-30' : 'animate-pulse'}`} size={40} />
-                                <div className="text-center mt-2 flex-1 flex flex-col justify-end">
-                                    <span className="block text-[10px] font-black text-white uppercase">Life Heal (+1)</span>
-                                    {hasBoughtLife ? (
-                                        <span className="block text-[10px] text-green-500 font-bold mt-1">SOLD OUT</span>
-                                    ) : (
-                                        <button 
-                                            onClick={handleBuyLife}
-                                            disabled={gold < LIFE_RECOVERY_PRICE || life >= maxLife}
-                                            className={`mt-2 flex items-center gap-1 px-3 py-1 rounded-full text-[10px] font-black transition-all ${gold >= LIFE_RECOVERY_PRICE && life < maxLife ? 'bg-yellow-600 hover:bg-yellow-500 text-white shadow-lg' : 'bg-slate-800 text-slate-500 cursor-not-allowed'}`}
-                                        >
-                                            <Coins size={10} /> {LIFE_RECOVERY_PRICE}G
-                                        </button>
-                                    )}
-                                </div>
+                            <div className="bg-slate-900/60 border-2 border-slate-800 rounded-xl p-2 flex flex-col items-center justify-between group hover:border-red-500/50 transition-all w-[100px]">
+                                <Heart className={`text-red-500 ${hasBoughtLife ? 'grayscale opacity-30' : 'animate-pulse'}`} size={28} />
+                                <span className="block text-[8px] font-black text-white uppercase mt-1">Life +1</span>
+                                {hasBoughtLife ? (
+                                    <span className="block text-[8px] text-green-500 font-bold mt-1">SOLD OUT</span>
+                                ) : (
+                                    <button
+                                        onClick={handleBuyLife}
+                                        disabled={gold < LIFE_RECOVERY_PRICE || life >= maxLife}
+                                        className={`mt-1 flex items-center gap-1 px-2 py-0.5 rounded-full text-[8px] font-black transition-all ${gold >= LIFE_RECOVERY_PRICE && life < maxLife ? 'bg-yellow-600 hover:bg-yellow-500 text-white shadow-lg' : 'bg-slate-800 text-slate-500 cursor-not-allowed'}`}
+                                    >
+                                        <Coins size={8} /> {LIFE_RECOVERY_PRICE}G
+                                    </button>
+                                )}
                             </div>
 
                             {/* Ability Option */}
                             {shopPassive && (
-                                <div className={`bg-slate-900/60 border-2 rounded-xl p-3 flex flex-col items-center justify-between group hover:brightness-125 transition-all relative h-[180px] ${getRarityColor(shopPassive.rarity)}`}>
-                                    <div className="flex flex-col items-center flex-1">
-                                        <SafeImage src={shopPassive.icon} alt={shopPassive.name} className={`w-10 h-10 object-contain mb-2 ${hasBoughtPassive ? 'grayscale opacity-30' : ''}`} />
-                                        <span className="text-[9px] font-black text-white uppercase text-center leading-tight line-clamp-2">{shopPassive.name}</span>
-                                        <p className="text-[7px] text-slate-400 leading-tight mt-1 text-center">{shopPassive.description}</p>
-                                    </div>
-                                    <div className="text-center mt-2 w-full flex flex-col items-center">
-                                        {hasBoughtPassive ? (
-                                            <span className="block text-[10px] text-green-500 font-bold">SOLD OUT</span>
-                                        ) : (
-                                            <button 
-                                                onClick={handleBuyPassive}
-                                                disabled={gold < getPassivePrice(shopPassive.rarity)}
-                                                className={`mt-1 flex items-center gap-1 px-3 py-1 rounded-full text-[10px] font-black transition-all ${gold >= getPassivePrice(shopPassive.rarity) ? 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-lg' : 'bg-slate-800 text-slate-500 cursor-not-allowed'}`}
-                                            >
-                                                <Coins size={10} /> {getPassivePrice(shopPassive.rarity)}G
-                                            </button>
-                                        )}
-                                    </div>
+                                <div className={`bg-slate-900/60 border-2 rounded-xl p-2 flex flex-col items-center justify-between group hover:brightness-125 transition-all w-[100px] ${getRarityColor(shopPassive.rarity)}`}>
+                                    <SafeImage src={shopPassive.icon} alt={shopPassive.name} className={`w-7 h-7 object-contain ${hasBoughtPassive ? 'grayscale opacity-30' : ''}`} />
+                                    <span className="text-[7px] font-black text-white uppercase text-center leading-tight line-clamp-1 mt-1">{shopPassive.name}</span>
+                                    {hasBoughtPassive ? (
+                                        <span className="block text-[8px] text-green-500 font-bold mt-1">SOLD OUT</span>
+                                    ) : (
+                                        <button
+                                            onClick={handleBuyPassive}
+                                            disabled={gold < getPassivePrice(shopPassive.rarity)}
+                                            className={`mt-1 flex items-center gap-1 px-2 py-0.5 rounded-full text-[8px] font-black transition-all ${gold >= getPassivePrice(shopPassive.rarity) ? 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-lg' : 'bg-slate-800 text-slate-500 cursor-not-allowed'}`}
+                                        >
+                                            <Coins size={8} /> {getPassivePrice(shopPassive.rarity)}G
+                                        </button>
+                                    )}
                                 </div>
                             )}
+                        </div>
 
-                            {/* Cards for Sale */}
+                        {/* 二段目以降：カード（3枚ずつ） */}
+                        <div className="grid grid-cols-3 gap-2 w-full px-2">
                             {shopCards.map((card) => {
                                 const isPurchased = purchasedIds.has(card.id);
                                 const price = getCardPrice(card.rarity);
                                 const canAfford = gold >= price;
+                                const ownedCount = permanentDeck.filter(d => d.name === card.name).length;
 
                                 return (
-                                    <div key={card.id} className="relative flex flex-col items-center">
-                                        <div className={`transform scale-90 ${isPurchased ? 'grayscale opacity-40' : ''}`}>
-                                            <Card skill={card} onClick={() => {}} disabled={true} mana={999} />
+                                    <div key={card.id} className="relative flex flex-col items-center pb-2">
+                                        <div className="transform scale-[0.8] origin-top">
+                                            <Card skill={card} onClick={() => {}} disabled={false} mana={999} heroStats={heroStats} />
                                         </div>
+                                        {/* 所持数（購入ボタンの上） */}
+                                        {ownedCount > 0 && (
+                                            <div className="text-slate-400 text-[7px] font-black mb-0.5">
+                                                所持:{ownedCount}
+                                            </div>
+                                        )}
                                         {isPurchased ? (
-                                            <div className="absolute inset-x-0 bottom-4 flex justify-center">
-                                                <div className="bg-green-600 text-white text-[10px] font-black px-4 py-1 rounded-full shadow-lg border-2 border-white/20 flex items-center gap-1">
-                                                    <Check size={12} /> SOLD
-                                                </div>
+                                            <div className="bg-green-600 text-white text-[8px] font-black px-2 py-0.5 rounded-full shadow-lg flex items-center gap-1">
+                                                <Check size={8} /> SOLD
                                             </div>
                                         ) : (
-                                            <button 
+                                            <button
                                                 onClick={() => handleBuyCard(card)}
                                                 disabled={!canAfford}
-                                                className={`absolute -bottom-2 flex items-center gap-1 px-4 py-1.5 rounded-full text-[11px] font-black shadow-2xl transition-all ${canAfford ? 'bg-indigo-600 hover:bg-indigo-500 text-white' : 'bg-slate-800 text-slate-500 cursor-not-allowed'}`}
+                                                className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-[8px] font-black shadow-xl transition-all ${canAfford ? 'bg-indigo-600 hover:bg-indigo-500 text-white' : 'bg-slate-800 text-slate-500 cursor-not-allowed'}`}
                                             >
-                                                <Coins size={12} /> {price}G
+                                                <Coins size={8} /> {price}G
                                             </button>
                                         )}
                                     </div>
                                 );
                             })}
                         </div>
-                        
-                        <button 
-                            onClick={() => nextLevel()}
-                            className="mt-6 mb-10 bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white px-10 py-2.5 rounded-full text-xs font-black tracking-[0.2em] uppercase border border-slate-700 transition-all flex items-center gap-2"
-                        >
-                            Continue Journey <ArrowRight size={14} />
-                        </button>
+
+                        {/* ボタン群 */}
+                        <div className="flex items-center gap-3 mt-2 mb-4">
+                            <button
+                                onClick={() => setIsDeckOverlayOpen(true)}
+                                className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-900 border border-indigo-500/40 rounded-lg text-[9px] font-black text-indigo-300 uppercase tracking-widest hover:bg-slate-800 transition-all"
+                            >
+                                <Search size={10} /> DECK
+                            </button>
+                            <button
+                                onClick={() => nextLevel()}
+                                className="bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white px-6 py-1.5 rounded-full text-[10px] font-black tracking-[0.15em] uppercase border border-slate-700 transition-all flex items-center gap-2"
+                            >
+                                Continue <ArrowRight size={12} />
+                            </button>
+                        </div>
                     </div>
                 )}
             </div>
@@ -881,6 +907,122 @@ const App: React.FC = () => {
                             <p className="text-[9px] text-slate-400 leading-tight mt-0.5">{battleEvent.description}</p>
                         </div>
                     </div>
+
+                    {/* プレイヤーバフ表示（常に表示・横スクロール対応） */}
+                    <div className="flex items-center gap-2 min-h-[1.5rem] w-full">
+                      <span className="text-[0.5rem] font-black text-slate-500 uppercase shrink-0">BUFFS:</span>
+                      <div className="relative flex-1 min-w-0">
+                        <div className="flex items-center gap-2 overflow-x-auto no-scrollbar py-6 -my-6">
+                          {playerBuffs.map(buff => (
+                            <div
+                              key={buff.id}
+                              className={`relative group flex items-center gap-1 px-2 py-0.5 rounded-full border transition-all animate-in fade-in zoom-in duration-300 shrink-0 cursor-pointer ${
+                                buff.type === 'charge'
+                                  ? 'bg-yellow-900/50 border-yellow-600'
+                                  : buff.type === 'stat_up'
+                                  ? 'bg-green-900/50 border-green-600'
+                                  : 'bg-red-900/50 border-red-600'
+                              }`}
+                            >
+                              <SafeImage src={buff.icon} alt={buff.name} className="w-4 h-4 object-contain" />
+                              <span className={`text-[0.5rem] font-black whitespace-nowrap ${
+                                buff.type === 'charge'
+                                  ? 'text-yellow-400'
+                                  : buff.type === 'stat_up'
+                                  ? 'text-green-400'
+                                  : 'text-red-400'
+                              }`}>
+                                {buff.name}
+                                {buff.stat && ` +${buff.value}`}
+                              </span>
+                              {/* ツールチップ（ホバー/タップで表示・下方向・左寄せ） */}
+                              <div className="absolute top-full left-0 mt-2 px-3 py-1.5 bg-slate-900 border border-slate-700 rounded-lg shadow-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible group-active:opacity-100 group-active:visible transition-all duration-200 z-50 pointer-events-none min-w-[120px]">
+                                <div className="absolute bottom-full left-3 border-4 border-transparent border-b-slate-700"></div>
+                                <p className="text-[0.5625rem] text-slate-200 whitespace-nowrap">{buff.description}</p>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* HASTEとMANAゲージ */}
+                    <div className="flex flex-col gap-2 w-full">
+                      {/* HASTEゲージ + ライフ表示 */}
+                      <div className="flex flex-col gap-0">
+                        {/* ライフ表示（ゲージの右上） */}
+                        <div className="flex justify-end items-center gap-1 mb-0.5">
+                          <span className="text-[0.5rem] font-black text-slate-400 uppercase">Life</span>
+                          <div className="flex items-center gap-0.5">
+                            {[...Array(maxLife)].map((_, i) => (
+                              <Heart
+                                key={i}
+                                className={`w-4 h-4 transition-all duration-300 ${
+                                  i < life
+                                    ? 'text-red-500 fill-red-500 drop-shadow-[0_0_4px_rgba(239,68,68,0.5)]'
+                                    : 'text-slate-700 fill-slate-800'
+                                }`}
+                              />
+                            ))}
+                          </div>
+                        </div>
+
+                        {/* ゲージ行 */}
+                        <div className="flex items-center gap-2">
+                          <span className="text-[0.5rem] font-black text-slate-300 w-12">HASTE</span>
+                          <div className="flex-1 h-6 bg-slate-950 rounded-l border border-slate-700 relative overflow-hidden">
+                            {/* 10区切りグリッド */}
+                            <div className="absolute inset-0 flex z-10">
+                              {[...Array(Math.ceil(maxHaste / 10))].map((_, i) => (
+                                <div key={i} className="flex-1 border-r border-slate-600 last:border-r-0" />
+                              ))}
+                            </div>
+                            {/* ゲージ本体（消費量を表示：0から始まりMAXに向かって増加） */}
+                            <div
+                              className={`h-full transition-all duration-300 relative ${
+                                (maxHaste - currentHaste) / maxHaste > 0.8
+                                  ? 'bg-gradient-to-r from-red-500 to-red-300'
+                                  : 'bg-gradient-to-r from-slate-400 to-white'
+                              }`}
+                              style={{ width: `${((maxHaste - currentHaste) / maxHaste) * 100}%` }}
+                            />
+                            {/* 数値表示（消費量 / 最大値） */}
+                            <span className="absolute inset-0 flex items-center justify-center text-[0.625rem] font-black text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)] z-20">
+                              {maxHaste - currentHaste} / {maxHaste}
+                            </span>
+                          </div>
+                          {/* ゲージ右端 → ライフへの矢印 */}
+                          <div className={`flex flex-col items-center justify-center h-6 px-1.5 rounded-r border border-l-0 border-red-800 ${
+                            (maxHaste - currentHaste) / maxHaste > 0.8
+                              ? 'bg-red-600 animate-pulse'
+                              : 'bg-red-950'
+                          }`}>
+                            <span className="text-[0.625rem] font-black text-red-300">-1</span>
+                            <span className="text-[0.5rem] text-red-400 leading-none">↑</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* MANAゲージ */}
+                      <div className="flex items-center gap-2">
+                        <span className="text-[0.5rem] font-black text-blue-400 w-12">MANA</span>
+                        <div className="flex-1 h-6 bg-slate-950 rounded border border-slate-700 relative overflow-hidden">
+                          <div
+                            className="h-full bg-gradient-to-r from-blue-600 to-blue-400 transition-all duration-300"
+                            style={{ width: `${(mana / maxMana) * 100}%` }}
+                          />
+                          <span className="absolute inset-0 flex items-center justify-center text-[0.625rem] font-black text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)]">
+                            {mana} / {maxMana}
+                          </span>
+                        </div>
+                        {/* 空のスペーサー（HASTEと揃えるため） */}
+                        <div className="flex items-center justify-center h-6 px-2 opacity-0">
+                          <Heart className="w-4 h-4" />
+                          <span className="text-[0.5rem] font-black ml-0.5">-1</span>
+                        </div>
+                      </div>
+                    </div>
+
                     <div className="flex flex-col gap-2 md:gap-4 flex-1">
                         {isStuckDueToMana ? (
                            <div className="flex-1 flex flex-col items-center justify-center animate-in fade-in">
@@ -895,7 +1037,7 @@ const App: React.FC = () => {
                            </div>
                         ) : hand.length > 0 ? (
                             <div className="flex justify-center gap-1.5 md:gap-3 animate-in slide-in-from-bottom-4 overflow-x-auto pb-1.5 no-scrollbar">
-                                {hand.map((item) => <div key={item.id} className="flex-1 max-w-[30%]"><Card skill={item} onClick={() => selectSkill(item)} disabled={currentHaste <= 0 || isTargetMet || isMonsterAttacking || turnResetMessage} mana={mana} marketModifier={getSkillMarketModifier(item)} effectsDisabled={isEffectDisabled(item)} /></div>)}
+                                {hand.map((item) => <div key={item.id} className="flex-1 max-w-[30%]"><Card skill={item} onClick={() => selectSkill(item)} disabled={currentHaste <= 0 || isTargetMet || isMonsterAttacking || turnResetMessage} mana={mana} heroStats={heroStats} physicalMultiplier={battleEvent.physicalMultiplier} magicMultiplier={battleEvent.magicMultiplier} effectsDisabled={isEffectDisabled(item)} /></div>)}
                             </div>
                         ) : (
                             <div className="flex-1 flex items-center justify-center text-center p-4">
@@ -931,7 +1073,7 @@ const App: React.FC = () => {
                 <div className="w-full flex flex-col items-center flex-1 justify-center py-2 animate-in slide-in-from-bottom-10">
                     <div className="flex items-center gap-2 mb-3"><PlusCircle size={20} className="text-green-400" /><h2 className="text-base font-fantasy font-black text-white tracking-[0.1em] uppercase">Choose a Reward</h2></div>
                     <div className="flex justify-center gap-1.5 md:gap-3 w-full mb-4">
-                        {cardRewards.map((reward, i) => <div key={reward.id} className="min-w-[85px] md:min-w-[100px] flex-1 card-entry" style={{ animationDelay: `${i * 0.1}s` }}><Card skill={reward} onClick={() => selectRewardCard(reward)} disabled={false} mana={999} /></div>)}
+                        {cardRewards.map((reward, i) => <div key={reward.id} className="min-w-[85px] md:min-w-[100px] flex-1 card-entry" style={{ animationDelay: `${i * 0.1}s` }}><Card skill={reward} onClick={() => selectRewardCard(reward)} disabled={false} mana={999} heroStats={heroStats} /></div>)}
                     </div>
                     <button onClick={() => handleBattleWinFinish(permanentDeck)} className="text-[10px] text-slate-500 hover:text-white transition-colors underline uppercase tracking-widest">Skip and Continue</button>
                 </div>
@@ -1019,12 +1161,7 @@ const App: React.FC = () => {
         <div className="flex-1 overflow-y-auto space-y-4 pr-2 no-scrollbar">
             {stack.length === 0 ? <div className="flex flex-col items-center justify-center h-40 opacity-10 italic text-[10px] text-center uppercase tracking-widest space-y-4"><Swords size={40} /><p>スキルを選択して<br/>コンボを開始せよ</p></div> : 
             stack.map((item, idx) => {
-                let isSkipped = false;
-                if (item.effect?.type === 'combo_skip') isSkipped = true;
-                if (item.effect?.type === 'adjacency_physical_skip') {
-                  const prev = idx > 0 ? stack[idx - 1] : null;
-                  if (prev && prev.category === 'physical') isSkipped = true;
-                }
+                const isSkipped = item.delay === 0;
                 return (
                     <div key={idx} className={`flex justify-between items-start text-[11px] group border-b border-slate-900 pb-2 animate-in slide-in-from-right-2 duration-300 ${isSkipped ? 'bg-indigo-900/10 border-indigo-900/30' : ''}`}>
                         <div className="flex gap-3">

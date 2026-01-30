@@ -1,11 +1,13 @@
 import { loadCSV } from './csvParser';
-import { Skill, Enemy, BattleEvent, SkillEffect, EffectType, Rarity } from '../types';
+import { Skill, Enemy, BattleEvent, SkillEffect, EffectType, EffectTrigger, EffectParams, CardType, Rarity } from '../types';
 
 // CSVから読み込む生データの型
 interface RawSkill {
   name: string;
   icon: string;
-  power: number;
+  cardType: string;
+  adRatio: number;
+  apRatio: number;
   manaCost: number;
   delay: number;
   color: string;
@@ -13,10 +15,10 @@ interface RawSkill {
   heightClass: string;
   widthClass: string;
   borderRadiusClass: string;
-  category: string;
   rarity: string;
   effectType: string;
-  effectValue: number;
+  effectTrigger: string;
+  effectParams: string;  // JSON文字列
   effectDescription: string;
 }
 
@@ -29,59 +31,127 @@ interface RawEnemy {
   traitId: string;
 }
 
-// Trait定義（敵の特性）
+// Trait定義（敵の特性）- 物理/魔法ダメージ倍率
 const TRAITS: Record<string, BattleEvent> = {
   NEUTRAL: {
     id: 'calm',
     title: '静寂',
     description: '特に異常はありません。',
-    multiplier: 1.0,
+    physicalMultiplier: 1.0,
+    magicMultiplier: 1.0,
     type: 'neutral'
   },
   PHYSICAL_BOOST: {
     id: 'blood_moon',
     title: 'ブラッドムーン',
-    description: '物理技の威力が1.5倍になります。',
-    targetCategory: 'physical',
-    multiplier: 1.5,
+    description: '物理ダメージが1.5倍になります。',
+    physicalMultiplier: 1.5,
+    magicMultiplier: 1.0,
     type: 'positive'
   },
   MAGIC_BOOST: {
     id: 'mana_overflow',
     title: 'マナの奔流',
-    description: '魔法技の威力が1.5倍になります。',
-    targetCategory: 'magic',
-    multiplier: 1.5,
+    description: '魔法ダメージが1.5倍になります。',
+    physicalMultiplier: 1.0,
+    magicMultiplier: 1.5,
     type: 'positive'
-  },
-  ANTI_BUFF: {
-    id: 'anti_magic_field',
-    title: 'アンチマジック',
-    description: '補助スキルの追加効果が無効化されます。',
-    targetCategory: 'buff',
-    multiplier: 1.0,
-    disableEffects: true,
-    type: 'negative'
   },
   PHYSICAL_RESIST: {
     id: 'iron_skin',
     title: '鋼の皮膚',
-    description: '物理技の威力が半減します。',
-    targetCategory: 'physical',
-    multiplier: 0.5,
+    description: '物理ダメージが半減します。',
+    physicalMultiplier: 0.5,
+    magicMultiplier: 1.0,
     type: 'negative'
   },
   MAGIC_RESIST: {
     id: 'magic_barrier',
     title: '対魔結界',
-    description: '魔法技の威力が半減します。',
-    targetCategory: 'magic',
-    multiplier: 0.5,
+    description: '魔法ダメージが半減します。',
+    physicalMultiplier: 1.0,
+    magicMultiplier: 0.5,
+    type: 'negative'
+  },
+  ANTI_SUPPORT: {
+    id: 'anti_support_field',
+    title: 'アンチサポート',
+    description: 'サポートカードの効果が無効化されます。',
+    physicalMultiplier: 1.0,
+    magicMultiplier: 1.0,
+    disableSupportEffects: true,
     type: 'negative'
   }
 };
 
 export const DEFAULT_EVENT = TRAITS.NEUTRAL;
+
+// バフ定義（プレイヤーに付与されるバフ/デバフ）
+export interface BuffDefinition {
+  id: string;
+  type: 'charge' | 'stat_up' | 'stat_down';
+  name: string;
+  icon: string;
+  description: string;
+  defaultValue: number;
+  stat?: 'ad' | 'ap' | 'sp' | 'mp';
+}
+
+export const BUFFS: Record<string, BuffDefinition> = {
+  CHARGE: {
+    id: 'charge',
+    type: 'charge',
+    name: 'ためる',
+    icon: 'https://img.icons8.com/fluency/144/lightning-bolt.png',
+    description: '次のアタックカードを複数回発動',
+    defaultValue: 2
+  },
+  AD_UP: {
+    id: 'ad_up',
+    type: 'stat_up',
+    name: '攻撃力UP',
+    icon: 'https://img.icons8.com/fluency/144/sword.png',
+    description: '物理攻撃力が上昇',
+    defaultValue: 50,
+    stat: 'ad'
+  },
+  AP_UP: {
+    id: 'ap_up',
+    type: 'stat_up',
+    name: '魔力UP',
+    icon: 'https://img.icons8.com/fluency/144/magic-wand.png',
+    description: '魔法攻撃力が上昇',
+    defaultValue: 50,
+    stat: 'ap'
+  },
+  SP_UP: {
+    id: 'sp_up',
+    type: 'stat_up',
+    name: 'ヘイストUP',
+    icon: 'https://img.icons8.com/fluency/144/running.png',
+    description: 'ヘイストが上昇',
+    defaultValue: 20,
+    stat: 'sp'
+  },
+  AD_DOWN: {
+    id: 'ad_down',
+    type: 'stat_down',
+    name: '攻撃力DOWN',
+    icon: 'https://img.icons8.com/fluency/144/sword.png',
+    description: '物理攻撃力が低下',
+    defaultValue: -30,
+    stat: 'ad'
+  },
+  AP_DOWN: {
+    id: 'ap_down',
+    type: 'stat_down',
+    name: '魔力DOWN',
+    icon: 'https://img.icons8.com/fluency/144/magic-wand.png',
+    description: '魔法攻撃力が低下',
+    defaultValue: -30,
+    stat: 'ap'
+  }
+};
 
 // ID生成
 const generateId = () => Math.random().toString(36).substr(2, 9);
@@ -91,17 +161,30 @@ function convertToSkill(raw: RawSkill): Omit<Skill, 'id'> {
   let effect: SkillEffect | undefined;
 
   if (raw.effectType && raw.effectType.length > 0) {
+    // effectParamsをJSONパース（空文字列やundefinedの場合は空オブジェクト）
+    let params: EffectParams = {};
+    if (raw.effectParams && raw.effectParams.length > 0) {
+      try {
+        params = JSON.parse(raw.effectParams);
+      } catch (e) {
+        console.warn(`Failed to parse effectParams for ${raw.name}:`, raw.effectParams);
+      }
+    }
+
     effect = {
       type: raw.effectType as EffectType,
-      value: raw.effectValue,
-      description: raw.effectDescription
+      trigger: (raw.effectTrigger || 'on_use') as EffectTrigger,
+      description: raw.effectDescription || '',
+      params
     };
   }
 
   return {
     name: raw.name,
     icon: raw.icon,
-    power: raw.power,
+    cardType: (raw.cardType || 'attack') as CardType,
+    adRatio: raw.adRatio,
+    apRatio: raw.apRatio,
     manaCost: raw.manaCost,
     delay: raw.delay,
     color: raw.color,
@@ -109,7 +192,6 @@ function convertToSkill(raw: RawSkill): Omit<Skill, 'id'> {
     heightClass: raw.heightClass,
     widthClass: raw.widthClass,
     borderRadiusClass: raw.borderRadiusClass,
-    category: raw.category as 'physical' | 'magic' | 'buff',
     rarity: raw.rarity as Rarity,
     effect
   };
@@ -134,8 +216,8 @@ export function createSkillWithId(skill: Omit<Skill, 'id'>): Skill {
 
 // データローダー
 export interface GameData {
-  initialSkills: Omit<Skill, 'id'>[];  // 初期デッキ用（スラッシュ、ハイスラッシュ、ためる）
-  skillPool: Omit<Skill, 'id'>[];       // 報酬・ショップ用
+  initialSkills: Omit<Skill, 'id'>[];
+  skillPool: Omit<Skill, 'id'>[];
   enemies: Enemy[];
 }
 
