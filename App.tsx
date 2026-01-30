@@ -729,7 +729,7 @@ const App: React.FC = () => {
 
       {/* DECK OVERLAY */}
       {isDeckOverlayOpen && (
-        <div className="fixed inset-0 z-[100] bg-slate-950/70 backdrop-blur-sm p-4 flex flex-col animate-in fade-in duration-300">
+        <div className="fixed inset-0 z-[100] bg-slate-900/50 backdrop-blur p-4 flex flex-col animate-in fade-in duration-300">
           <div className="w-full max-w-sm md:max-w-md lg:max-w-lg mx-auto flex flex-col h-full">
             <div className="flex justify-between items-center mb-6 pb-4 border-b border-slate-800">
               <div className="flex items-center gap-3">
@@ -789,7 +789,7 @@ const App: React.FC = () => {
           </div>
         );
         return (
-          <div className="fixed inset-0 z-[100] bg-slate-950/70 backdrop-blur-sm p-4 flex flex-col animate-in fade-in duration-300">
+          <div className="fixed inset-0 z-[100] bg-slate-900/50 backdrop-blur p-4 flex flex-col animate-in fade-in duration-300">
             <div className="w-full max-w-sm md:max-w-md lg:max-w-lg mx-auto flex flex-col h-full">
               <div className="flex justify-between items-center mb-6 pb-4 border-b border-slate-800">
                 <div className="flex items-center gap-3">
@@ -833,7 +833,7 @@ const App: React.FC = () => {
       {isCardDexOpen && (() => {
         const allCards = [...gameData.initialSkills, ...gameData.skillPool];
         return (
-          <div className="fixed inset-0 z-[100] bg-slate-950/70 backdrop-blur-sm p-4 flex flex-col animate-in fade-in duration-300">
+          <div className="fixed inset-0 z-[100] bg-slate-900/50 backdrop-blur p-4 flex flex-col animate-in fade-in duration-300">
             <div className="w-full max-w-sm md:max-w-md lg:max-w-lg mx-auto flex flex-col h-full">
               <div className="flex justify-between items-center mb-6 pb-4 border-b border-slate-800">
                 <div className="flex items-center gap-3">
@@ -889,7 +889,7 @@ const App: React.FC = () => {
 
       {/* DISCARD PILE OVERLAY (使用済みカード) */}
       {isDiscardOpen && (
-        <div className="fixed inset-0 z-[100] bg-slate-950/70 backdrop-blur-sm p-4 flex flex-col animate-in fade-in duration-300">
+        <div className="fixed inset-0 z-[100] bg-slate-900/50 backdrop-blur p-4 flex flex-col animate-in fade-in duration-300">
           <div className="w-full max-w-sm md:max-w-md lg:max-w-lg mx-auto flex flex-col h-full">
             <div className="flex justify-between items-center mb-6 pb-4 border-b border-slate-800">
               <div className="flex items-center gap-3">
@@ -955,7 +955,7 @@ const App: React.FC = () => {
 
       {/* DEBUG MENU OVERLAY */}
       {isDebugOpen && (
-        <div className="fixed inset-0 z-[100] bg-slate-950/70 backdrop-blur-sm p-4 flex flex-col animate-in fade-in duration-300">
+        <div className="fixed inset-0 z-[100] bg-slate-900/50 backdrop-blur p-4 flex flex-col animate-in fade-in duration-300">
           <div className="w-full max-w-sm md:max-w-md lg:max-w-lg mx-auto flex flex-col h-full">
             <div className="flex justify-between items-center mb-6 pb-4 border-b border-slate-800">
               <div className="flex items-center gap-3">
