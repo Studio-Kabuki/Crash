@@ -10,7 +10,7 @@ import {
   ShieldAlert, Sparkles, Ghost, Hexagon,
   CheckCircle2, Info, Award, Undo2, Layers, PlusCircle,
   X, Search, Biohazard, Heart, Coffee, Coins, ShoppingCart, Check,
-  ZapOff, Star, BookOpen
+  ZapOff, Star, BookOpen, Settings, RefreshCw
 } from 'lucide-react';
 
 // フォールバック付き画像コンポーネント
@@ -80,6 +80,20 @@ const App: React.FC = () => {
   // Card Dex Overlay State
   const [isCardDexOpen, setIsCardDexOpen] = useState<boolean>(false);
 
+  // Discard Pile Overlay State (使用済みカード)
+  const [isDiscardOpen, setIsDiscardOpen] = useState<boolean>(false);
+
+  // Debug Menu Overlay State
+  const [isDebugOpen, setIsDebugOpen] = useState<boolean>(false);
+
+  // Passcode Modal State
+  const [isPasscodeModalOpen, setIsPasscodeModalOpen] = useState<boolean>(false);
+  const [passcodeTarget, setPasscodeTarget] = useState<'bestiary' | 'cardDex' | 'debug' | null>(null);
+  const [passcodeInput, setPasscodeInput] = useState<string>('');
+  const [passcodeError, setPasscodeError] = useState<boolean>(false);
+  const [isPasscodeVerified, setIsPasscodeVerified] = useState<boolean>(false);
+  const CORRECT_PASSCODE = '1212';
+
   // Monster & Animation States
   const [isMonsterShaking, setIsMonsterShaking] = useState<boolean>(false);
   const [isMonsterAttacking, setIsMonsterAttacking] = useState<boolean>(false);
@@ -112,6 +126,64 @@ const App: React.FC = () => {
   }, [passives]);
 
   const generateId = () => Math.random().toString(36).substr(2, 9);
+
+  // パスコード確認関数
+  const openWithPasscode = (target: 'bestiary' | 'cardDex' | 'debug') => {
+    // 既に認証済みなら直接開く
+    if (isPasscodeVerified) {
+      if (target === 'bestiary') setIsBestiaryOpen(true);
+      else if (target === 'cardDex') setIsCardDexOpen(true);
+      else if (target === 'debug') setIsDebugOpen(true);
+      return;
+    }
+    setPasscodeTarget(target);
+    setPasscodeInput('');
+    setPasscodeError(false);
+    setIsPasscodeModalOpen(true);
+  };
+
+  const handlePasscodeSubmit = () => {
+    if (passcodeInput === CORRECT_PASSCODE) {
+      setIsPasscodeModalOpen(false);
+      setIsPasscodeVerified(true); // 認証済みフラグをON
+      if (passcodeTarget === 'bestiary') setIsBestiaryOpen(true);
+      else if (passcodeTarget === 'cardDex') setIsCardDexOpen(true);
+      else if (passcodeTarget === 'debug') setIsDebugOpen(true);
+      setPasscodeInput('');
+      setPasscodeError(false);
+    } else {
+      setPasscodeError(true);
+    }
+  };
+
+  // デバッグ機能
+  const debugAddCard = (skill: Skill) => {
+    const newCard = createSkillWithId(skill);
+    setPermanentDeck(prev => [...prev, newCard]);
+    setDeck(prev => [...prev, newCard]);
+  };
+
+  const debugRerollHand = () => {
+    const newDeck = shuffle([...deck, ...hand]);
+    setDeck(newDeck);
+    const newHand = newDeck.slice(0, 3);
+    setHand(newHand);
+  };
+
+  const debugAddPassive = (passive: PassiveEffect) => {
+    setPassives(prev => [...prev, passive]);
+    if (passive.type === 'score_flat') {
+      setMana(prev => Math.min(prev + passive.value, maxMana + passive.value));
+    }
+    if (passive.type === 'max_life_boost') {
+      setLife(prev => Math.min(prev + passive.value, maxLife + passive.value));
+    }
+  };
+
+  const debugFullRestore = () => {
+    setCurrentHaste(maxHaste);
+    setMana(maxMana);
+  };
 
   // バフを付与する関数
   const addBuff = (buffId: string, customValue?: number) => {
@@ -657,7 +729,7 @@ const App: React.FC = () => {
 
       {/* DECK OVERLAY */}
       {isDeckOverlayOpen && (
-        <div className="fixed inset-0 z-[100] bg-slate-950/90 backdrop-blur-md p-4 flex flex-col animate-in fade-in duration-300">
+        <div className="fixed inset-0 z-[100] bg-slate-950/70 backdrop-blur-sm p-4 flex flex-col animate-in fade-in duration-300">
           <div className="w-full max-w-sm md:max-w-md lg:max-w-lg mx-auto flex flex-col h-full">
             <div className="flex justify-between items-center mb-6 pb-4 border-b border-slate-800">
               <div className="flex items-center gap-3">
@@ -717,7 +789,7 @@ const App: React.FC = () => {
           </div>
         );
         return (
-          <div className="fixed inset-0 z-[100] bg-slate-950/90 backdrop-blur-md p-4 flex flex-col animate-in fade-in duration-300">
+          <div className="fixed inset-0 z-[100] bg-slate-950/70 backdrop-blur-sm p-4 flex flex-col animate-in fade-in duration-300">
             <div className="w-full max-w-sm md:max-w-md lg:max-w-lg mx-auto flex flex-col h-full">
               <div className="flex justify-between items-center mb-6 pb-4 border-b border-slate-800">
                 <div className="flex items-center gap-3">
@@ -761,7 +833,7 @@ const App: React.FC = () => {
       {isCardDexOpen && (() => {
         const allCards = [...gameData.initialSkills, ...gameData.skillPool];
         return (
-          <div className="fixed inset-0 z-[100] bg-slate-950/90 backdrop-blur-md p-4 flex flex-col animate-in fade-in duration-300">
+          <div className="fixed inset-0 z-[100] bg-slate-950/70 backdrop-blur-sm p-4 flex flex-col animate-in fade-in duration-300">
             <div className="w-full max-w-sm md:max-w-md lg:max-w-lg mx-auto flex flex-col h-full">
               <div className="flex justify-between items-center mb-6 pb-4 border-b border-slate-800">
                 <div className="flex items-center gap-3">
@@ -814,6 +886,135 @@ const App: React.FC = () => {
           </div>
         );
       })()}
+
+      {/* DISCARD PILE OVERLAY (使用済みカード) */}
+      {isDiscardOpen && (
+        <div className="fixed inset-0 z-[100] bg-slate-950/70 backdrop-blur-sm p-4 flex flex-col animate-in fade-in duration-300">
+          <div className="w-full max-w-sm md:max-w-md lg:max-w-lg mx-auto flex flex-col h-full">
+            <div className="flex justify-between items-center mb-6 pb-4 border-b border-slate-800">
+              <div className="flex items-center gap-3">
+                <ScrollText className="text-red-400" size={24} />
+                <h2 className="font-fantasy text-2xl tracking-[0.2em] uppercase text-slate-100">使用済みカード</h2>
+                <span className="text-slate-500 text-sm font-bold bg-slate-900 px-3 py-1 rounded-full">{stack.length} CARDS</span>
+              </div>
+              <button onClick={() => setIsDiscardOpen(false)} className="p-2 hover:bg-slate-800 rounded-full text-slate-400 hover:text-white"><X size={28} /></button>
+            </div>
+            <div className="flex-1 overflow-y-auto no-scrollbar pb-10">
+              {stack.length === 0 ? (
+                <div className="flex flex-col items-center justify-center h-40 opacity-30">
+                  <ScrollText size={48} className="text-slate-600 mb-4" />
+                  <p className="text-slate-500 text-sm font-bold uppercase tracking-widest">まだカードを使用していません</p>
+                </div>
+              ) : (
+                <div className="deck-grid">
+                  {stack.filter(s => s.id !== 'rest').map((skill, idx) => (
+                    <div key={`${skill.id}-${idx}`} className="relative transition-all duration-300 h-[145px] md:h-[180px] lg:h-[210px]">
+                      <div className="transform scale-[0.65] md:scale-[0.8] lg:scale-[0.95] origin-top">
+                        <Card skill={skill} onClick={() => {}} disabled={false} mana={999} heroStats={heroStats} />
+                      </div>
+                      <div className="absolute top-1 left-1 px-1.5 py-0.5 bg-red-900/90 rounded text-[8px] font-black text-white uppercase tracking-wider shadow-lg">
+                        #{idx + 1}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+            <button onClick={() => setIsDiscardOpen(false)} className="mt-4 w-full bg-slate-800 hover:bg-slate-700 py-3 rounded-xl font-bold uppercase tracking-widest text-sm flex items-center justify-center gap-2">
+              <Undo2 size={16} /> 閉じる
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* PASSCODE MODAL */}
+      {isPasscodeModalOpen && (
+        <div className="fixed inset-0 z-[200] bg-slate-950/95 backdrop-blur-md flex items-center justify-center animate-in fade-in duration-300">
+          <div className="bg-slate-900 border border-slate-700 rounded-2xl p-6 w-80 shadow-2xl">
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-lg font-bold text-slate-100 uppercase tracking-widest">パスコード入力</h2>
+              <button onClick={() => setIsPasscodeModalOpen(false)} className="p-1 hover:bg-slate-800 rounded-full text-slate-400 hover:text-white"><X size={20} /></button>
+            </div>
+            <p className="text-sm text-slate-400 mb-4">この機能を使用するにはパスコードを入力してください</p>
+            <input
+              type="password"
+              value={passcodeInput}
+              onChange={(e) => { setPasscodeInput(e.target.value); setPasscodeError(false); }}
+              onKeyDown={(e) => e.key === 'Enter' && handlePasscodeSubmit()}
+              placeholder="パスコード"
+              className={`w-full px-4 py-3 bg-slate-800 border rounded-lg text-center text-xl font-bold tracking-[0.5em] text-slate-100 focus:outline-none focus:ring-2 ${passcodeError ? 'border-red-500 focus:ring-red-500' : 'border-slate-600 focus:ring-indigo-500'}`}
+              autoFocus
+            />
+            {passcodeError && <p className="text-red-400 text-sm mt-2 text-center">パスコードが違います</p>}
+            <button onClick={handlePasscodeSubmit} className="w-full mt-4 bg-indigo-600 hover:bg-indigo-500 py-3 rounded-lg font-bold uppercase tracking-widest text-sm text-white transition-all">
+              確認
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* DEBUG MENU OVERLAY */}
+      {isDebugOpen && (
+        <div className="fixed inset-0 z-[100] bg-slate-950/70 backdrop-blur-sm p-4 flex flex-col animate-in fade-in duration-300">
+          <div className="w-full max-w-sm md:max-w-md lg:max-w-lg mx-auto flex flex-col h-full">
+            <div className="flex justify-between items-center mb-6 pb-4 border-b border-slate-800">
+              <div className="flex items-center gap-3">
+                <Settings className="text-slate-400" size={24} />
+                <h2 className="font-fantasy text-2xl tracking-[0.2em] uppercase text-slate-100">デバッグメニュー</h2>
+              </div>
+              <button onClick={() => setIsDebugOpen(false)} className="p-2 hover:bg-slate-800 rounded-full text-slate-400 hover:text-white"><X size={28} /></button>
+            </div>
+            <div className="flex-1 overflow-y-auto no-scrollbar pb-10 space-y-6">
+              {/* クイックアクション */}
+              <div>
+                <h3 className="text-sm font-bold text-slate-400 uppercase tracking-widest mb-3 pb-2 border-b border-slate-800">クイックアクション</h3>
+                <div className="flex flex-wrap gap-2">
+                  <button onClick={() => { debugFullRestore(); }} className="flex items-center gap-2 px-4 py-2 bg-green-900/50 border border-green-600 rounded-lg text-green-400 font-bold text-sm hover:bg-green-800/50 transition-all">
+                    <Heart size={16} /> ヘイスト・マナ全回復
+                  </button>
+                  <button onClick={() => { debugRerollHand(); }} className="flex items-center gap-2 px-4 py-2 bg-blue-900/50 border border-blue-600 rounded-lg text-blue-400 font-bold text-sm hover:bg-blue-800/50 transition-all">
+                    <RefreshCw size={16} /> 手札リロール
+                  </button>
+                </div>
+              </div>
+
+              {/* カード追加 */}
+              <div>
+                <h3 className="text-sm font-bold text-slate-400 uppercase tracking-widest mb-3 pb-2 border-b border-slate-800">カードをデッキに追加</h3>
+                <div className="grid grid-cols-3 gap-2 max-h-[200px] overflow-y-auto no-scrollbar">
+                  {gameData && [...gameData.initialSkills, ...gameData.skillPool].map((skill, idx) => (
+                    <button key={`add-${skill.name}-${idx}`} onClick={() => debugAddCard(skill)} className="p-2 bg-slate-800 border border-slate-700 rounded-lg hover:border-indigo-500 transition-all text-left">
+                      <div className="flex items-center gap-2">
+                        <SafeImage src={skill.icon} alt={skill.name} className="w-6 h-6 object-contain" />
+                        <span className="text-[9px] font-bold text-slate-300 truncate">{skill.name}</span>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* パッシブ追加 */}
+              <div>
+                <h3 className="text-sm font-bold text-slate-400 uppercase tracking-widest mb-3 pb-2 border-b border-slate-800">アビリティを獲得</h3>
+                <div className="grid grid-cols-2 gap-2 max-h-[200px] overflow-y-auto no-scrollbar">
+                  {PASSIVE_POOL.map((passive, idx) => (
+                    <button key={`add-passive-${passive.id}-${idx}`} onClick={() => debugAddPassive(passive)} className="p-2 bg-slate-800 border border-slate-700 rounded-lg hover:border-yellow-500 transition-all text-left flex items-center gap-2">
+                      <SafeImage src={passive.icon} alt={passive.name} className="w-6 h-6 object-contain" />
+                      <div>
+                        <span className="text-[9px] font-bold text-slate-300 block truncate">{passive.name}</span>
+                        <span className="text-[7px] text-slate-500 block truncate">{passive.description}</span>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+            <button onClick={() => setIsDebugOpen(false)} className="mt-4 w-full bg-slate-800 hover:bg-slate-700 py-3 rounded-xl font-bold uppercase tracking-widest text-sm flex items-center justify-center gap-2">
+              <Undo2 size={16} /> 閉じる
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* LEFT SIDE PANEL - PCでのみ表示 */}
       <div className="hidden xl:flex w-64 bg-slate-900/50 border-r border-slate-800 p-6 flex-col shadow-2xl z-30 fixed left-0 top-0 h-screen">
@@ -871,21 +1072,38 @@ const App: React.FC = () => {
                             </div>
                           </div>
                         )}
-                        {/* 山札表示（左上） */}
-                        <div className="absolute top-1 left-1 z-40">
-                            <div className="flex items-center gap-1.5 px-2 py-0.5 bg-indigo-950/80 border border-indigo-700/50 rounded text-[0.5rem] font-black uppercase tracking-[0.1em] text-indigo-300 shadow-lg"><Layers className="w-[0.625rem] h-[0.625rem]" /><span>山札: {deck.length}</span></div>
-                        </div>
-
                         {/* 敵名（中央上部） */}
                         <div className="absolute top-2 left-1/2 transform -translate-x-1/2 z-20">
                             <div className="px-3 py-0.5 bg-slate-900/90 border border-slate-700 rounded text-[0.625rem] font-black uppercase tracking-[0.1em] text-slate-300 shadow-lg">{currentEnemy.name}</div>
                         </div>
 
-                        {/* デッキビュワーボタン */}
+                        {/* 階層表示とデバッグボタン（右上） */}
+                        <div className="absolute top-1 right-1 md:top-2 md:right-2 z-40 flex items-center gap-2">
+                          <div className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-900/90 backdrop-blur-md border border-yellow-500/40 rounded-lg shadow-xl">
+                            <Hexagon className="w-4 h-4 text-yellow-500" />
+                            <span className="text-[0.75rem] font-black text-yellow-400 uppercase tracking-widest">FLOOR</span>
+                            <span className="text-lg font-black text-yellow-300">{level}</span>
+                          </div>
+                          <button onClick={() => openWithPasscode('debug')} className="p-2 bg-slate-900/90 backdrop-blur-md border border-slate-500/40 rounded-lg shadow-xl hover:bg-slate-800 transition-all">
+                            <Settings size={16} className="text-slate-400" />
+                          </button>
+                        </div>
+
+                        {/* デッキビュワーボタン（左下） */}
                         <div className="absolute bottom-1 left-1 md:bottom-2 md:left-2 z-40">
                           <button onClick={() => setIsDeckOverlayOpen(true)} className="flex items-center gap-1.5 px-2 py-1 bg-slate-900/90 backdrop-blur-md border border-indigo-500/40 rounded-lg text-[9px] font-black text-indigo-300 uppercase tracking-widest hover:bg-slate-800 transition-all shadow-xl">
-                            <Search size={12} />
+                            <Layers size={12} />
                             <span>DECK</span>
+                            <span className="px-1.5 py-0.5 bg-indigo-600 rounded text-white text-[8px]">{deck.length}</span>
+                          </button>
+                        </div>
+
+                        {/* 使用済みカードビューワーボタン（右下） */}
+                        <div className="absolute bottom-1 right-1 md:bottom-2 md:right-2 z-40">
+                          <button onClick={() => setIsDiscardOpen(true)} className="flex items-center gap-1.5 px-2 py-1 bg-slate-900/90 backdrop-blur-md border border-red-500/40 rounded-lg text-[9px] font-black text-red-300 uppercase tracking-widest hover:bg-slate-800 transition-all shadow-xl">
+                            <ScrollText size={12} />
+                            <span>USED</span>
+                            <span className="px-1.5 py-0.5 bg-red-600 rounded text-white text-[8px]">{stack.length}</span>
                           </button>
                         </div>
 
@@ -1051,8 +1269,8 @@ const App: React.FC = () => {
                 <div className="flex flex-col items-center justify-center flex-1 gap-5 py-4">
                     <h2 className="text-xl md:text-2xl font-fantasy font-bold text-slate-100 tracking-widest uppercase">Combo Chronicle</h2>
                     <button onClick={startGame} className="flex items-center gap-2 bg-red-600 hover:bg-red-500 text-white font-bold py-2.5 px-10 rounded-full shadow-[0_0_20px_rgba(220,38,38,0.4)] transition-all uppercase tracking-widest"><Swords size={18} /> 戦闘開始</button>
-                    <button onClick={() => setIsBestiaryOpen(true)} className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-2.5 px-10 rounded-full shadow-[0_0_20px_rgba(99,102,241,0.4)] transition-all uppercase tracking-widest"><BookOpen size={18} /> モンスター図鑑</button>
-                    <button onClick={() => setIsCardDexOpen(true)} className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-2.5 px-10 rounded-full shadow-[0_0_20px_rgba(16,185,129,0.4)] transition-all uppercase tracking-widest"><Layers size={18} /> カード図鑑</button>
+                    <button onClick={() => openWithPasscode('bestiary')} className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-2.5 px-10 rounded-full shadow-[0_0_20px_rgba(99,102,241,0.4)] transition-all uppercase tracking-widest"><BookOpen size={18} /> モンスター図鑑</button>
+                    <button onClick={() => openWithPasscode('cardDex')} className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-2.5 px-10 rounded-full shadow-[0_0_20px_rgba(16,185,129,0.4)] transition-all uppercase tracking-widest"><Layers size={18} /> カード図鑑</button>
                 </div>
             )}
             {gameState === 'PLAYING' && (
