@@ -1,13 +1,13 @@
 name,icon,cardType,baseDamage,adRatio,apRatio,manaCost,delay,color,borderColor,heightClass,widthClass,borderRadiusClass,rarity,effectType,effectTrigger,effectParams,effectDescription
 string,string,string,number,number,number,number,number,string,string,string,string,string,string,string,string,string,string
 スラッシュ,https://img.icons8.com/fluency/144/sword.png,attack,10,100,0,0,10,bg-slate-700,border-slate-400,h-8,w-56,rounded-sm transform -skew-x-12,C,,,,
-ハイスラッシュ,https://img.icons8.com/fluency/144/long-sword.png,attack,20,300,0,10,10,bg-slate-600,border-indigo-400,h-10,w-56,rounded-sm transform -skew-x-12,R,,,,
-マジックミサイル,https://img.icons8.com/fluency/144/magic-wand.png,attack,200,0,100,30,0,bg-indigo-600,border-indigo-300,h-9,w-48,rounded-full,R,,,,
-クラッシュ,https://img.icons8.com/fluency/144/fire-element.png,attack,100,0,200,50,10,bg-orange-600,border-orange-400,h-10,w-52,rounded-full,SSR,,,,
+ハイスラッシュ,https://img.icons8.com/fluency/144/long-sword.png,attack,35,150,0,10,10,bg-slate-600,border-indigo-400,h-10,w-56,rounded-sm transform -skew-x-12,R,,,,
+マジックミサイル,https://img.icons8.com/fluency/144/magic-wand.png,attack,10,0,200,30,0,bg-indigo-600,border-indigo-300,h-9,w-48,rounded-full,R,,,,
+クラッシュ,https://img.icons8.com/fluency/144/fire-element.png,attack,110,0,100,50,10,bg-orange-600,border-orange-400,h-10,w-52,rounded-full,R,,,,
 過集中,https://img.icons8.com/fluency/144/cleric.png,support,0,0,0,0,0,bg-teal-600,border-teal-400,h-8,w-48,rounded-full,R,mana_recovery,on_use,{"value":30},マナを30回復する
 ファイナルスラッシュ,https://img.icons8.com/fluency/144/swords.png,attack,0,0,0,20,10,bg-purple-700,border-purple-400,h-12,w-56,rounded-none transform skew-x-12,SSR,deck_slash_bonus,on_use,"{""value"":30,""targetName"":""スラッシュ""}",山札の「スラッシュ」枚数×30ダメージ
-かぶりつき,https://img.icons8.com/fluency/144/vampire.png,attack,0,133,0,0,10,bg-red-800,border-red-400,h-8,w-48,rounded-full,R,lifesteal,on_damage,,与えたダメージ分マナを回復
--祖国のために-,https://img.icons8.com/fluency/144/shield.png,attack,0,167,0,10,10,bg-indigo-700,border-yellow-400,h-10,w-52,rounded-md,SSR,permanent_power_up,on_use,{"value":67},使用するたび永続的に威力+20
+かぶりつき,https://img.icons8.com/fluency/144/vampire.png,attack,0,200,0,0,10,bg-red-800,border-red-400,h-8,w-48,rounded-full,R,lifesteal,on_damage,,与えたダメージ分マナを回復
+-祖国のために-,https://img.icons8.com/fluency/144/shield.png,attack,50,100,0,10,10,bg-indigo-700,border-yellow-400,h-10,w-52,rounded-md,SSR,permanent_power_up,on_use,{"value":67},使用するたび永続的に威力+20
 ためる,https://img.icons8.com/fluency/144/lightning-bolt.png,support,0,0,0,30,0,bg-orange-600,border-orange-400,h-8,w-48,rounded-full,R,add_buff,on_use,{"buffId":"CHARGE"},次のアタックカードを2回発動
 突飛でい,https://img.icons8.com/fluency/144/kick.png,attack,70,0,0,0,10,bg-slate-500,border-white,h-8,w-48,rounded-full,C,,,,
-魔剣乱舞,https://img.icons8.com/fluency/144/fantasy.png,attack,50,150,100,40,15,bg-gradient-to-br,border-purple-400,h-10,w-52,rounded-lg,SSR,,,,
+文武両道,https://img.icons8.com/fluency/144/fantasy.png,attack,40,100,50,20,10,bg-gradient-to-br,border-purple-400,h-10,w-52,rounded-lg,R,,,,物理と魔法の両方で攻撃する

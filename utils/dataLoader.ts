@@ -48,6 +48,7 @@ interface RawPassive {
   description: string;
   type: string;
   value: number;
+  value2: number;
   rarity: string;
   targetCategory: string;
 }
@@ -262,6 +263,7 @@ function convertToPassive(raw: RawPassive): PassiveEffect {
     type: raw.type as PassiveEffect['type'],
     value: raw.value,
     rarity: raw.rarity as Rarity,
+    ...(raw.value2 ? { value2: raw.value2 } : {}),
     ...(raw.targetCategory ? { targetCategory: raw.targetCategory } : {})
   };
 }

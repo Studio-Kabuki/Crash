@@ -61,10 +61,10 @@ const App: React.FC = () => {
 
   // Shop specific states
   const [shopCards, setShopCards] = useState<Skill[]>([]);
-  const [shopPassive, setShopPassive] = useState<PassiveEffect | null>(null);
+  const [shopPassives, setShopPassives] = useState<PassiveEffect[]>([]);
+  const [purchasedPassiveIds, setPurchasedPassiveIds] = useState<Set<string>>(new Set());
   const [purchasedIds, setPurchasedIds] = useState<Set<string>>(new Set());
   const [hasBoughtLife, setHasBoughtLife] = useState<boolean>(false);
-  const [hasBoughtPassive, setHasBoughtPassive] = useState<boolean>(false);
 
   // Status Effects
   const [isEnemyPoisoned, setIsEnemyPoisoned] = useState<boolean>(false);
@@ -241,6 +241,33 @@ const App: React.FC = () => {
 
   const LIFE_RECOVERY_PRICE = 30;
 
+  // レアリティに基づく重み付け抽選
+  const weightedRandomSelect = <T extends { rarity: Rarity }>(items: T[], count: number): T[] => {
+    const getWeight = (rarity: Rarity) => {
+      if (rarity === 'SSR') return 1;  // 低確率
+      if (rarity === 'R') return 3;    // 中確率
+      return 6;                         // C: 高確率
+    };
+
+    const selected: T[] = [];
+    const pool = [...items];
+
+    for (let i = 0; i < count && pool.length > 0; i++) {
+      const totalWeight = pool.reduce((sum, item) => sum + getWeight(item.rarity), 0);
+      let random = Math.random() * totalWeight;
+
+      for (let j = 0; j < pool.length; j++) {
+        random -= getWeight(pool[j].rarity);
+        if (random <= 0) {
+          selected.push(pool[j]);
+          pool.splice(j, 1);
+          break;
+        }
+      }
+    }
+    return selected;
+  };
+
   // デッキをシャッフルするユーティリティ
   const shuffle = (array: Skill[]) => {
     const newArr = [...array];
@@ -357,17 +384,17 @@ const App: React.FC = () => {
 
   const generateShopInventory = () => {
     if (!gameData) return;
-    // Generate 5 random cards
-    const shuffledCards = [...gameData.skillPool].sort(() => 0.5 - Math.random());
-    setShopCards(shuffledCards.slice(0, 5).map(s => createSkillWithId(s)));
+    // Generate 5 random cards with rarity weighting
+    const selectedCards = weightedRandomSelect(gameData.skillPool, 5);
+    setShopCards(selectedCards.map(s => createSkillWithId(s)));
 
-    // Generate 1 random passive
-    const shuffledPassives = [...(gameData.passivePool || [])].sort(() => 0.5 - Math.random());
-    setShopPassive(shuffledPassives[0] || null);
+    // Generate 3 random passives with rarity weighting
+    const selectedPassives = weightedRandomSelect(gameData.passivePool || [], 3);
+    setShopPassives(selectedPassives);
 
     setPurchasedIds(new Set());
+    setPurchasedPassiveIds(new Set());
     setHasBoughtLife(false);
-    setHasBoughtPassive(false);
   };
 
   const enterShop = () => {
@@ -384,23 +411,32 @@ const App: React.FC = () => {
     setPurchasedIds(prev => new Set(prev).add(card.id));
   };
 
-  const handleBuyPassive = () => {
-    if (!shopPassive || hasBoughtPassive) return;
-    const price = getPassivePrice(shopPassive.rarity);
+  const handleBuyPassive = (passive: PassiveEffect) => {
+    if (purchasedPassiveIds.has(passive.id)) return;
+    const price = getPassivePrice(passive.rarity);
     if (gold < price) return;
 
     setGold(prev => prev - price);
-    setPassives(prev => [...prev, shopPassive]);
-    
+    setPassives(prev => [...prev, passive]);
+    setPurchasedPassiveIds(prev => new Set(prev).add(passive.id));
+
     // Immediate stat effects
-    if (shopPassive.type === 'score_flat') {
-        setMana(prev => Math.min(prev + shopPassive.value, maxMana + shopPassive.value));
+    if (passive.type === 'score_flat') {
+        setMana(prev => Math.min(prev + passive.value, maxMana + passive.value));
     }
-    if (shopPassive.type === 'max_life_boost') {
-        setLife(prev => Math.min(prev + shopPassive.value, maxLife + shopPassive.value));
+    if (passive.type === 'max_life_boost') {
+        setLife(prev => Math.min(prev + passive.value, maxLife + passive.value));
     }
-    
-    setHasBoughtPassive(true);
+    if (passive.type === 'ad_boost') {
+        setHeroStats(prev => ({ ...prev, ad: prev.ad + passive.value }));
+    }
+    if (passive.type === 'ap_boost') {
+        setHeroStats(prev => ({ ...prev, ap: prev.ap + passive.value }));
+    }
+    if (passive.type === 'ap_mana_boost') {
+        setHeroStats(prev => ({ ...prev, ap: prev.ap + passive.value }));
+        setMana(prev => Math.min(prev + (passive.value2 || 0), maxMana + (passive.value2 || 0)));
+    }
   };
 
   const handleBuyLife = () => {
@@ -430,6 +466,16 @@ const App: React.FC = () => {
     if (passive.type === 'max_life_boost') {
         setLife(prev => Math.min(prev + passive.value, maxLife + passive.value));
     }
+    if (passive.type === 'ad_boost') {
+        setHeroStats(prev => ({ ...prev, ad: prev.ad + passive.value }));
+    }
+    if (passive.type === 'ap_boost') {
+        setHeroStats(prev => ({ ...prev, ap: prev.ap + passive.value }));
+    }
+    if (passive.type === 'ap_mana_boost') {
+        setHeroStats(prev => ({ ...prev, ap: prev.ap + passive.value }));
+        setMana(prev => Math.min(prev + (passive.value2 || 0), maxMana + (passive.value2 || 0)));
+    }
     generateCardRewards();
     setGameState('CARD_REWARD');
   };
@@ -455,12 +501,32 @@ const App: React.FC = () => {
     return skill.cardType === 'support';  // サポートカードのみ無効化
   };
 
-  // スキルの基本ダメージを計算（基礎ダメージ + 物理/魔法別々に倍率適用）
+  // スキルの基本ダメージを計算（基礎ダメージも倍率適用）
   const getSkillBaseDamage = (s: Skill) => {
     const baseDmg = s.baseDamage || 0;
+    const hasPhysical = s.adRatio > 0;
+    const hasMagic = s.apRatio > 0;
+
+    // 基礎ダメージの倍率適用
+    let scaledBaseDmg = 0;
+    if (hasPhysical && hasMagic) {
+      // ミックス: 半分ずつ割り振って計算
+      const halfBase = baseDmg / 2;
+      scaledBaseDmg = Math.floor(halfBase * battleEvent.physicalMultiplier + halfBase * battleEvent.magicMultiplier);
+    } else if (hasPhysical) {
+      // 物理のみ: 物理倍率を適用
+      scaledBaseDmg = Math.floor(baseDmg * battleEvent.physicalMultiplier);
+    } else if (hasMagic) {
+      // 魔法のみ: 魔法倍率を適用
+      scaledBaseDmg = Math.floor(baseDmg * battleEvent.magicMultiplier);
+    } else {
+      // 係数なし: 倍率の影響を受けない（真のダメージ）
+      scaledBaseDmg = baseDmg;
+    }
+
     const physicalDmg = Math.floor(heroStats.ad * s.adRatio / 100 * battleEvent.physicalMultiplier);
     const magicDmg = Math.floor(heroStats.ap * s.apRatio / 100 * battleEvent.magicMultiplier);
-    return baseDmg + physicalDmg + magicDmg;
+    return scaledBaseDmg + physicalDmg + magicDmg;
   };
 
   // chargeバフがあるかチェック（ダメージ表示用）
@@ -565,8 +631,10 @@ const App: React.FC = () => {
 
     setDeck(newDeck);
 
-    // ディレイ計算（スキルのdelay値をそのまま使用）
-    const actualDelay = Math.round(skill.delay);
+    // ディレイ計算（物理ヘイスト半減パッシブ対応）
+    const hasPhysicalHasteReduction = passives.some(p => p.type === 'physical_haste_reduction');
+    const isPhysicalOnly = skill.adRatio > 0 && skill.apRatio === 0;
+    const actualDelay = Math.round(hasPhysicalHasteReduction && isPhysicalOnly ? skill.delay / 2 : skill.delay);
 
     setTimeout(() => {
         setIsMonsterShaking(true);
@@ -1004,7 +1072,7 @@ const App: React.FC = () => {
               <div>
                 <h3 className="text-sm font-bold text-slate-400 uppercase tracking-widest mb-3 pb-2 border-b border-slate-800">アビリティを獲得</h3>
                 <div className="grid grid-cols-2 gap-2 max-h-[200px] overflow-y-auto no-scrollbar">
-                  {PASSIVE_POOL.map((passive, idx) => (
+                  {(gameData?.passivePool || []).map((passive, idx) => (
                     <button key={`add-passive-${passive.id}-${idx}`} onClick={() => debugAddPassive(passive)} className="p-2 bg-slate-800 border border-slate-700 rounded-lg hover:border-yellow-500 transition-all text-left flex items-center gap-2">
                       <SafeImage src={passive.icon} alt={passive.name} className="w-6 h-6 object-contain" />
                       <div>
@@ -1193,40 +1261,47 @@ const App: React.FC = () => {
                             )}
                         </div>
 
-                        {/* 二段目：アビリティ */}
-                        {shopPassive && (
-                            <div className="flex items-center gap-2 px-4 py-2 border-b border-slate-700">
+                        {/* 二段目：アビリティ（3つ） */}
+                        <div className="flex flex-col gap-1 px-4 py-2 border-b border-slate-700">
+                          {shopPassives.map((passive) => {
+                            const isPurchased = purchasedPassiveIds.has(passive.id);
+                            const price = getPassivePrice(passive.rarity);
+                            const canAfford = gold >= price;
+                            return (
+                              <div key={passive.id} className="flex items-center gap-2">
                                 <div className={`flex-1 p-2 rounded border-2 flex items-center gap-2 ${
-                                    hasBoughtPassive
+                                    isPurchased
                                         ? 'opacity-50 border-slate-700'
-                                        : getRarityColor(shopPassive.rarity)
+                                        : getRarityColor(passive.rarity)
                                 }`}>
-                                    <SafeImage src={shopPassive.icon} alt={shopPassive.name} className={`w-6 h-6 object-contain shrink-0 ${hasBoughtPassive ? 'grayscale' : ''}`} />
+                                    <SafeImage src={passive.icon} alt={passive.name} className={`w-6 h-6 object-contain shrink-0 ${isPurchased ? 'grayscale' : ''}`} />
                                     <div className="flex-1 min-w-0">
                                         <div className="flex items-center gap-1">
-                                            <h3 className="font-bold text-slate-100 text-[8px] leading-tight uppercase tracking-wide truncate">{shopPassive.name}</h3>
-                                            <span className={`text-[7px] font-black shrink-0 ${shopPassive.rarity === 'SSR' ? 'text-yellow-500' : shopPassive.rarity === 'R' ? 'text-slate-300' : 'text-orange-500'}`}>{shopPassive.rarity}</span>
+                                            <h3 className="font-bold text-slate-100 text-[8px] leading-tight uppercase tracking-wide truncate">{passive.name}</h3>
+                                            <span className={`text-[7px] font-black shrink-0 ${passive.rarity === 'SSR' ? 'text-yellow-500' : passive.rarity === 'R' ? 'text-slate-300' : 'text-orange-500'}`}>{passive.rarity}</span>
                                         </div>
-                                        <p className="text-[7px] text-slate-400 leading-snug truncate">{shopPassive.description}</p>
+                                        <p className="text-[7px] text-slate-400 leading-snug truncate">{passive.description}</p>
                                     </div>
                                 </div>
-                                {hasBoughtPassive ? (
+                                {isPurchased ? (
                                     <span className="text-[8px] text-green-500 font-bold px-2 shrink-0">SOLD</span>
                                 ) : (
                                     <button
-                                        onClick={handleBuyPassive}
-                                        disabled={gold < getPassivePrice(shopPassive.rarity)}
+                                        onClick={() => handleBuyPassive(passive)}
+                                        disabled={!canAfford}
                                         className={`flex items-center gap-1 px-3 py-2 rounded-lg text-[8px] font-black shrink-0 transition-all ${
-                                            gold >= getPassivePrice(shopPassive.rarity)
+                                            canAfford
                                                 ? 'bg-indigo-600 hover:bg-indigo-500 text-white'
                                                 : 'bg-slate-800 text-slate-500 cursor-not-allowed'
                                         }`}
                                     >
-                                        <Coins size={12} /> {getPassivePrice(shopPassive.rarity)}G
+                                        <Coins size={12} /> {price}G
                                     </button>
                                 )}
-                            </div>
-                        )}
+                              </div>
+                            );
+                          })}
+                        </div>
 
                         {/* 三段目：カード */}
                         <div className="grid grid-cols-3 gap-2 w-full px-2">
@@ -1371,14 +1446,14 @@ const App: React.FC = () => {
                         {/* 基礎パラメータ AD/AP */}
                         <div className="flex items-center gap-2">
                           <span className="text-[0.5rem] font-black text-slate-500">基礎パラメータ：</span>
-                          <Tooltip content={"物理ダメージが上昇する。\nカードによって倍率は異なり、倍率が高いほど後半にダメージがスケールしやすい。"}>
+                          <Tooltip content={"物理ダメージが上昇する。\nカードによって倍率は異なり、倍率が高いほど後半にダメージがスケールしやすい。\n\n※ミックスダメージのカードは、基礎ダメージを\n物理/魔法に半分ずつ割り振って耐性計算する。"}>
                             <div className="flex items-center gap-1 px-2 py-0.5 bg-orange-950/50 border border-orange-700/50 rounded cursor-pointer hover:bg-orange-900/50 transition-colors">
                               <Swords className="w-3 h-3 text-orange-400" />
                               <span className="text-[0.5rem] font-black text-orange-400 uppercase">AD</span>
                               <span className="text-[0.625rem] font-black text-orange-300">{heroStats.ad}</span>
                             </div>
                           </Tooltip>
-                          <Tooltip content={"魔法ダメージが上昇する。\n魔法の方がダメージ倍率の低いカードが多い傾向。"}>
+                          <Tooltip content={"魔法ダメージが上昇する。\n魔法の方がダメージ倍率の低いカードが多い傾向。\n\n※ミックスダメージのカードは、基礎ダメージを\n物理/魔法に半分ずつ割り振って耐性計算する。"}>
                             <div className="flex items-center gap-1 px-2 py-0.5 bg-cyan-950/50 border border-cyan-700/50 rounded cursor-pointer hover:bg-cyan-900/50 transition-colors">
                               <Sparkles className="w-3 h-3 text-cyan-400" />
                               <span className="text-[0.5rem] font-black text-cyan-400 uppercase">AP</span>

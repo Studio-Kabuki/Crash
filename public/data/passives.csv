@@ -1,9 +1,12 @@
-id,name,icon,description,type,value,rarity,targetCategory
-string,string,string,string,string,number,string,string
-mana_well,魔力の泉,https://img.icons8.com/fluency/144/fountain.png,魔力の最大値が永続的に +50 されます。,score_flat,50,R,
-combo_master,ヘイストマスター,https://img.icons8.com/fluency/144/fire-element.png,ヘイストの上限が +10 増加します。,capacity_boost,10,SSR,
-physical_mastery,剛腕の極み,https://img.icons8.com/fluency/144/arm-wrestling.png,物理スキルの威力が永続的に +15 されます。,category_buff,15,R,physical
-magic_mastery,叡智の輝き,https://img.icons8.com/fluency/144/crystal-ball.png,魔法スキルの威力が永続的に +20 されます。,category_buff,20,R,magic
-mana_goddess,マナの女神,https://img.icons8.com/fluency/144/angel.png,マナの上限を +30 します。,score_flat,30,R,
-attorney_badge,弁護士バッジ,https://img.icons8.com/fluency/144/law.png,ライフの最大値が1つ増えます。,max_life_boost,1,SSR,
-enhancer,増強剤,https://img.icons8.com/fluency/144/biotech.png,与えるダメージが常に +40 されます。,flat_damage_bonus,40,C,
+id,name,icon,description,type,value,value2,rarity,targetCategory
+string,string,string,string,string,number,number,string,string
+mana_well,魔力の泉,https://img.icons8.com/fluency/144/fountain.png,マナの上限が +20 されます。,score_flat,20,,R,
+mana_goddess,マナの女神,https://img.icons8.com/fluency/144/angel.png,マナの上限が +50 されます。,score_flat,50,,SSR,
+physical_mastery,剛腕の極み,https://img.icons8.com/fluency/144/arm-wrestling.png,AD（物理攻撃力）が +5 されます。,ad_boost,5,,R,
+physical_mastery_ex,剛腕の極み・極,https://img.icons8.com/fluency/144/muscle.png,AD（物理攻撃力）が +7 されます。,ad_boost,7,,SSR,
+magic_mastery,叡智の輝き,https://img.icons8.com/fluency/144/crystal-ball.png,AP +5、マナ +10。,ap_mana_boost,5,10,R,
+glasses,メガネ,https://img.icons8.com/fluency/144/glasses.png,AP（魔法攻撃力）が +7 されます。,ap_boost,7,,R,
+combo_master,ヘイストマスター,https://img.icons8.com/fluency/144/fire-element.png,ヘイストの上限が +10 増加します。,capacity_boost,10,,SSR,
+attorney_badge,弁護士バッジ,https://img.icons8.com/fluency/144/law.png,ライフの最大値が1つ増えます。,max_life_boost,1,,SSR,
+enhancer,増強剤,https://img.icons8.com/fluency/144/biotech.png,ダメージを与えるたび +20 の確定ダメージ。,flat_damage_bonus,20,,C,
+swift_blade,迅速の刃,https://img.icons8.com/fluency/144/running.png,物理ダメージのみのカードのヘイスト消費が半分になる。,physical_haste_reduction,50,,SSR,

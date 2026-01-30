@@ -23,15 +23,33 @@ export const Card: React.FC<CardProps> = ({
     setHasError(false);
   }, [skill.icon]);
 
-  // ダメージ計算（基礎ダメージ + 物理/魔法係数）
+  // ダメージ計算（基礎ダメージも倍率適用）
   const baseDamage = skill.baseDamage || 0;
-  const physicalDamage = Math.floor(heroStats.ad * skill.adRatio / 100 * physicalMultiplier);
-  const magicDamage = Math.floor(heroStats.ap * skill.apRatio / 100 * magicMultiplier);
-  const totalDamage = baseDamage + physicalDamage + magicDamage;
-
-  const hasBaseDamage = baseDamage > 0;
   const hasPhysicalRatio = skill.adRatio > 0;
   const hasMagicRatio = skill.apRatio > 0;
+
+  // 基礎ダメージの倍率適用
+  let scaledBaseDamage = 0;
+  if (hasPhysicalRatio && hasMagicRatio) {
+    // ミックス: 半分ずつ割り振って計算
+    const halfBase = baseDamage / 2;
+    scaledBaseDamage = Math.floor(halfBase * physicalMultiplier + halfBase * magicMultiplier);
+  } else if (hasPhysicalRatio) {
+    // 物理のみ: 物理倍率を適用
+    scaledBaseDamage = Math.floor(baseDamage * physicalMultiplier);
+  } else if (hasMagicRatio) {
+    // 魔法のみ: 魔法倍率を適用
+    scaledBaseDamage = Math.floor(baseDamage * magicMultiplier);
+  } else {
+    // 係数なし: 倍率の影響を受けない（真のダメージ）
+    scaledBaseDamage = baseDamage;
+  }
+
+  const physicalDamage = Math.floor(heroStats.ad * skill.adRatio / 100 * physicalMultiplier);
+  const magicDamage = Math.floor(heroStats.ap * skill.apRatio / 100 * magicMultiplier);
+  const totalDamage = scaledBaseDamage + physicalDamage + magicDamage;
+
+  const hasBaseDamage = baseDamage > 0;
   const hasOnlyBaseDamage = hasBaseDamage && !hasPhysicalRatio && !hasMagicRatio;
   const hasMixedDamage = hasPhysicalRatio && hasMagicRatio;  // 物理+魔法の混合
   const hasDamage = hasBaseDamage || hasPhysicalRatio || hasMagicRatio;
@@ -43,6 +61,14 @@ export const Card: React.FC<CardProps> = ({
   const canAffordMana = mana >= skill.manaCost;
   const canAffordHaste = currentHaste >= skill.delay;
   const canAfford = canAffordMana && canAffordHaste;
+
+  // レアリティに応じた枠色
+  const getRarityBorderColor = () => {
+    if (!canAfford) return 'border-red-900';
+    if (skill.rarity === 'SSR') return 'border-yellow-500';
+    if (skill.rarity === 'R') return 'border-purple-500';
+    return 'border-slate-600';
+  };
 
   const handleImgError = () => {
     setImgSrc('https://img.icons8.com/fluency/144/star.png');
@@ -58,7 +84,7 @@ export const Card: React.FC<CardProps> = ({
         flex flex-col items-center justify-start
         w-28 h-[14rem]
         bg-slate-900 border-2 rounded-lg
-        ${canAfford ? 'border-slate-700' : 'border-red-900'}
+        ${getRarityBorderColor()}
         shadow-2xl
         transition-all duration-150
         active:translate-y-1 active:shadow-none
