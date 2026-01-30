@@ -1,7 +1,8 @@
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { GameState, Skill, PassiveEffect, BattleEvent, Enemy, Rarity, HeroStats } from './types';
-import { INITIAL_SKILLS, PASSIVE_POOL, DEFAULT_EVENT, MAX_COMBO, INITIAL_MANA, INITIAL_LIFE, FLOOR_ENEMIES, SKILL_POOL, INITIAL_HERO_STATS } from './constants';
+import { PASSIVE_POOL, INITIAL_MANA, INITIAL_LIFE, INITIAL_HERO_STATS } from './constants';
+import { loadGameData, GameData, DEFAULT_EVENT, createSkillWithId } from './utils/dataLoader';
 import { Card } from './components/Card';
 import { 
   RotateCcw, Swords, Skull, Zap, ArrowRight, ScrollText, 
@@ -26,6 +27,10 @@ const SafeImage: React.FC<{ src: string; alt: string; className?: string }> = ({
 };
 
 const App: React.FC = () => {
+  // ゲームデータ（CSVからロード）
+  const [gameData, setGameData] = useState<GameData | null>(null);
+  const [isLoading, setIsLoading] = useState<boolean>(true);
+
   const [gameState, setGameState] = useState<GameState>('START');
   const [level, setLevel] = useState<number>(1);
   const [stack, setStack] = useState<Skill[]>([]);
@@ -73,7 +78,7 @@ const App: React.FC = () => {
   const [turnResetMessage, setTurnResetMessage] = useState<boolean>(false);
 
   const [projectile, setProjectile] = useState<{ icon: string; id: string } | null>(null);
-  const [currentEnemy, setCurrentEnemy] = useState<Enemy>(FLOOR_ENEMIES[0]);
+  const [currentEnemy, setCurrentEnemy] = useState<Enemy>({ name: '', icon: '', baseHP: 0, minFloor: 0, maxFloor: 0 });
   const [enemyHealth, setEnemyHealth] = useState<number>(0);
   const [floatingDamages, setFloatingDamages] = useState<{ id: string; value: number; isMana?: boolean; isPoison?: boolean }[]>([]);
 
@@ -98,7 +103,15 @@ const App: React.FC = () => {
   }, [passives]);
 
   const generateId = () => Math.random().toString(36).substr(2, 9);
-  
+
+  // CSVからゲームデータをロード
+  useEffect(() => {
+    loadGameData().then(data => {
+      setGameData(data);
+      setIsLoading(false);
+    });
+  }, []);
+
   const isTargetMet = enemyHealth <= 0;
 
   const getCardPrice = (rarity: Rarity) => {
@@ -149,20 +162,30 @@ const App: React.FC = () => {
   }, [permanentDeck, stack, hand]);
 
   const getEnemyForLevel = (lvl: number) => {
-      const candidates = FLOOR_ENEMIES.filter(e => lvl >= e.minFloor && lvl <= e.maxFloor);
-      const pool = candidates.length > 0 ? candidates : [FLOOR_ENEMIES[FLOOR_ENEMIES.length - 1]];
+      if (!gameData) return { name: '', icon: '', baseHP: 0, minFloor: 0, maxFloor: 0 };
+      const candidates = gameData.enemies.filter(e => lvl >= e.minFloor && lvl <= e.maxFloor);
+      const pool = candidates.length > 0 ? candidates : [gameData.enemies[gameData.enemies.length - 1]];
       return pool[Math.floor(Math.random() * pool.length)];
   };
 
   const startGame = () => {
+    if (!gameData) return;
+
+    // 初期デッキ作成: スラッシュ×3, ハイスラッシュ×1, ためる×1
+    const slashSkill = gameData.initialSkills.find(s => s.name === 'スラッシュ');
+    const highSlashSkill = gameData.initialSkills.find(s => s.name === 'ハイスラッシュ');
+    const chargeSkill = gameData.initialSkills.find(s => s.name === 'ためる');
+
     const startDeck: Skill[] = [];
-    for(let i=0; i<3; i++) startDeck.push({...INITIAL_SKILLS[0], id: generateId()});
-    startDeck.push({...INITIAL_SKILLS[1], id: generateId()});
-    startDeck.push({...INITIAL_SKILLS[2], id: generateId()});
-    
+    if (slashSkill) {
+      for (let i = 0; i < 3; i++) startDeck.push(createSkillWithId(slashSkill));
+    }
+    if (highSlashSkill) startDeck.push(createSkillWithId(highSlashSkill));
+    if (chargeSkill) startDeck.push(createSkillWithId(chargeSkill));
+
     setPermanentDeck(startDeck);
     const battleDeck = shuffle(startDeck);
-    
+
     setDeck(battleDeck);
     setStack([]);
     setCurrentComboPower(0);
@@ -177,12 +200,12 @@ const App: React.FC = () => {
     setIsEnemyPoisoned(false);
     setPhysicalAttackCounter(0);
     setCurrentHaste(INITIAL_HERO_STATS.sp);
-    
+
     const initialEnemy = getEnemyForLevel(1);
     setCurrentEnemy(initialEnemy);
     setEnemyHealth(initialEnemy.baseHP);
     setBattleEvent(initialEnemy.trait || DEFAULT_EVENT);
-    
+
     const initialHand = battleDeck.slice(0, 3);
     setHand(initialHand);
   };
@@ -217,10 +240,11 @@ const App: React.FC = () => {
   }, [permanentDeck, maxMana]);
 
   const generateShopInventory = () => {
+    if (!gameData) return;
     // Generate 5 random cards
-    const shuffledCards = [...SKILL_POOL].sort(() => 0.5 - Math.random());
-    setShopCards(shuffledCards.slice(0, 5).map(s => ({ ...s, id: generateId() })));
-    
+    const shuffledCards = [...gameData.skillPool].sort(() => 0.5 - Math.random());
+    setShopCards(shuffledCards.slice(0, 5).map(s => createSkillWithId(s)));
+
     // Generate 1 random passive
     const shuffledPassives = [...PASSIVE_POOL].sort(() => 0.5 - Math.random());
     setShopPassive(shuffledPassives[0]);
@@ -277,8 +301,9 @@ const App: React.FC = () => {
   };
 
   const generateCardRewards = () => {
-    const shuffled = [...SKILL_POOL].sort(() => 0.5 - Math.random());
-    setCardRewards(shuffled.slice(0, 3).map(s => ({ ...s, id: generateId() })));
+    if (!gameData) return;
+    const shuffled = [...gameData.skillPool].sort(() => 0.5 - Math.random());
+    setCardRewards(shuffled.slice(0, 3).map(s => createSkillWithId(s)));
   };
 
   const selectPassive = (passive: PassiveEffect) => {
@@ -528,9 +553,21 @@ const App: React.FC = () => {
     }
   };
 
+  // ローディング画面
+  if (isLoading || !gameData) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-slate-950 text-slate-100">
+        <div className="flex flex-col items-center gap-4">
+          <div className="w-12 h-12 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin"></div>
+          <p className="text-[1rem] font-bold text-slate-400">Loading Game Data...</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen flex justify-center bg-slate-950 relative overflow-hidden text-slate-100 font-sans">
-      
+
       <style>{`
         html {
           /* 375px基準で16px、画面幅に比例してスケール、最大24pxまで */

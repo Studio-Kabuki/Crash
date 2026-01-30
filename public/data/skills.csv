@@ -1,0 +1,13 @@
+name,icon,power,manaCost,delay,color,borderColor,heightClass,widthClass,borderRadiusClass,category,rarity,effectType,effectValue,effectDescription
+string,string,number,number,number,string,string,string,string,string,string,string,string,number,string
+スラッシュ,https://img.icons8.com/fluency/144/sword.png,30,0,10,bg-slate-700,border-slate-400,h-8,w-56,rounded-sm transform -skew-x-12,physical,C,,,
+ハイスラッシュ,https://img.icons8.com/fluency/144/long-sword.png,50,10,10,bg-slate-600,border-indigo-400,h-10,w-56,rounded-sm transform -skew-x-12,physical,R,,,
+ためる,https://img.icons8.com/fluency/144/lightning-bolt.png,0,0,10,bg-orange-600,border-orange-400,h-8,w-48,rounded-full,buff,R,next_action_double,0,次に使う補助以外のカードを2回発動する
+マジックミサイル,https://img.icons8.com/fluency/144/magic-wand.png,30,30,10,bg-indigo-600,border-indigo-300,h-9,w-48,rounded-full,magic,R,combo_skip,0,ディレイなし
+爆裂魔法,https://img.icons8.com/fluency/144/fire-element.png,120,50,10,bg-orange-600,border-orange-400,h-10,w-52,rounded-full,magic,SSR,,,
+精神統一,https://img.icons8.com/fluency/144/cleric.png,0,-30,10,bg-teal-600,border-teal-400,h-8,w-48,rounded-full,buff,R,combo_skip,0,マナ30回復 / ディレイなし
+ファイナルスラッシュ,https://img.icons8.com/fluency/144/swords.png,0,20,10,bg-purple-700,border-purple-400,h-12,w-56,rounded-none transform skew-x-12,physical,SSR,deck_count_bonus,30,山札の「スラッシュ」と名の付く技を全て消し、その枚数×30ダメージ
+かぶりつき,https://img.icons8.com/fluency/144/vampire.png,40,0,10,bg-red-800,border-red-400,h-8,w-48,rounded-full,physical,R,lifesteal_mana,1,与えたダメージ分マナを回復
+アイスボルト,https://img.icons8.com/fluency/144/snowflake.png,40,20,10,bg-blue-600,border-cyan-300,h-9,w-48,rounded-full,magic,R,prev_turn_magic_bonus,2,直前に魔法を使っていたら威力2倍
+祖国のために,https://img.icons8.com/fluency/144/shield.png,50,10,10,bg-indigo-700,border-yellow-400,h-10,w-52,rounded-md,physical,SSR,permanent_stack,20,使用するたび永続的に威力+20
+ウルスラッシュ,https://img.icons8.com/fluency/144/long-sword.png,30,0,10,bg-slate-500,border-orange-500,h-8,w-56,rounded-sm transform -skew-x-12,physical,R,adjacency_physical_skip,0,30ダメージ / 直前が物理ならディレイなし
