@@ -21,6 +21,7 @@ interface RawSkill {
   effectTrigger: string;
   effectParams: string;  // JSON文字列
   effectDescription: string;
+  flavorText: string;    // 目立たない補足テキスト
 }
 
 interface RawEnemy {
@@ -260,7 +261,8 @@ function convertToSkill(raw: RawSkill): Omit<Skill, 'id'> {
     widthClass: raw.widthClass,
     borderRadiusClass: raw.borderRadiusClass,
     rarity: raw.rarity as Rarity,
-    effect
+    effect,
+    ...(raw.flavorText ? { flavorText: raw.flavorText } : {})
   };
 }
 

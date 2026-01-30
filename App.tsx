@@ -76,6 +76,10 @@ const App: React.FC = () => {
   // ヘイスト（行動力）システム
   const [currentHaste, setCurrentHaste] = useState<number>(defaultHeroStats.sp);
 
+  // 手札システム
+  const [baseHandSize, setBaseHandSize] = useState<number>(3); // 基礎手札枚数
+  const [isShuffling, setIsShuffling] = useState<boolean>(false); // シャッフル中表示
+
   // Deck Overlay State
   const [isDeckOverlayOpen, setIsDeckOverlayOpen] = useState<boolean>(false);
 
@@ -185,10 +189,11 @@ const App: React.FC = () => {
   const debugRerollHand = () => {
     // 手札をデッキに戻してシャッフル
     const newDeck = shuffle([...deck, ...hand]);
-    // 最初の3枚を新しい手札として取る
-    const newHand = newDeck.slice(0, 3);
+    // handSize枚を新しい手札として取る
+    const cardsToDraw = Math.min(handSize, newDeck.length);
+    const newHand = newDeck.slice(0, cardsToDraw);
     // デッキから手札分を除く
-    setDeck(newDeck.slice(3));
+    setDeck(newDeck.slice(cardsToDraw));
     setHand(newHand);
   };
 
@@ -320,32 +325,55 @@ const App: React.FC = () => {
     return newArr;
   };
 
-  // 手札を引く（毎回シャッフルしてから引く）
-  const drawHand = useCallback((currentDeck: Skill[], remainingHaste: number, currentStack?: Skill[]) => {
+  // 手札サイズ（アビリティボーナス込み）
+  const handSize = useMemo(() => {
+    const handSizeBonus = passives.filter(p => p.type === 'hand_size_boost').reduce((sum, p) => sum + p.value, 0);
+    return baseHandSize + handSizeBonus;
+  }, [baseHandSize, passives]);
+
+  // 手札を引く（手札が0枚のときにhandSize枚まで引く）
+  const drawHand = useCallback((currentDeck: Skill[], remainingHaste: number, currentStack?: Skill[], currentHandSize?: number) => {
+    const targetHandSize = currentHandSize ?? handSize;
+
     if (remainingHaste <= 0) {
       setHand([]);
       return;
     }
 
-    if (currentDeck.length === 0) {
-      // currentStackが渡された場合はそれを使う（状態更新前の最新値）
-      const stackForIds = currentStack ?? stack;
-      const usedIds = [...stackForIds.map(s => s.id), ...hand.map(h => h.id)];
-      const recycledDeck = shuffle(permanentDeck.filter(p => !usedIds.includes(p.id)));
-      if (recycledDeck.length === 0) {
-         setHand([]);
-         return;
+    let availableDeck = [...currentDeck];
+    const stackToUse = currentStack ?? stack;
+
+    // デッキが足りない場合、捨て札をシャッフルして山札に戻す
+    if (availableDeck.length < targetHandSize) {
+      if (stackToUse.length > 0) {
+        setIsShuffling(true);
+        const recycledCards = shuffle([...stackToUse]);
+        availableDeck = [...availableDeck, ...recycledCards];
+        // 捨て札をクリア（状態は後で更新）
+        setTimeout(() => setIsShuffling(false), 800);
       }
-      setDeck(recycledDeck);
-      setHand(recycledDeck.slice(0, 3));
+    }
+
+    // まだ足りなければあるだけ引く
+    const cardsToDraw = Math.min(targetHandSize, availableDeck.length);
+    if (cardsToDraw === 0) {
+      setHand([]);
+      setDeck([]);
       return;
     }
 
-    // カード使用後は毎回デッキをシャッフルして手札を引く
-    const shuffledDeck = shuffle([...currentDeck]);
-    setDeck(shuffledDeck.slice(3)); // 手札分を除いた残りをデッキに
-    setHand(shuffledDeck.slice(0, 3));
-  }, [permanentDeck, stack, hand]);
+    // シャッフルしてから引く
+    const shuffledDeck = shuffle(availableDeck);
+    const newHand = shuffledDeck.slice(0, cardsToDraw);
+    const newDeck = shuffledDeck.slice(cardsToDraw);
+
+    setHand(newHand);
+    setDeck(newDeck);
+    // 捨て札から戻した場合はスタックをクリア
+    if (availableDeck.length > currentDeck.length) {
+      setStack([]);
+    }
+  }, [handSize, stack]);
 
   const getEnemyForLevel = (lvl: number) => {
       if (!gameData) return { name: '', icon: '', baseHP: 0, minFloor: 0, maxFloor: 0 };
@@ -357,17 +385,17 @@ const App: React.FC = () => {
   const startGame = () => {
     if (!gameData) return;
 
-    // 初期デッキ作成: スラッシュ×3, ハイスラッシュ×1, ためる×1
+    // 初期デッキ作成: スラッシュ×2, ためる×1, ハイスラッシュ×1
     const slashSkill = gameData.initialSkills.find(s => s.name === 'スラッシュ');
     const highSlashSkill = gameData.initialSkills.find(s => s.name === 'ハイスラッシュ');
     const chargeSkill = gameData.initialSkills.find(s => s.name === 'ためる');
 
     const startDeck: Skill[] = [];
     if (slashSkill) {
-      for (let i = 0; i < 3; i++) startDeck.push(createSkillWithId(slashSkill));
+      for (let i = 0; i < 2; i++) startDeck.push(createSkillWithId(slashSkill));
     }
-    if (highSlashSkill) startDeck.push(createSkillWithId(highSlashSkill));
     if (chargeSkill) startDeck.push(createSkillWithId(chargeSkill));
+    if (highSlashSkill) startDeck.push(createSkillWithId(highSlashSkill));
 
     setPermanentDeck(startDeck);
     const battleDeck = shuffle(startDeck);
@@ -393,8 +421,11 @@ const App: React.FC = () => {
     setEnemyHealth(initialEnemy.baseHP);
     setBattleEvent(initialEnemy.trait || DEFAULT_EVENT);
 
-    const initialHand = battleDeck.slice(0, 3);
+    // 初期手札を引く（パッシブがないのでbaseHandSize枚）
+    const cardsToDraw = Math.min(baseHandSize, battleDeck.length);
+    const initialHand = battleDeck.slice(0, cardsToDraw);
     setHand(initialHand);
+    setDeck(battleDeck.slice(cardsToDraw));
   };
 
   const nextLevel = useCallback((updatedPermanentDeck?: Skill[]) => {
@@ -413,18 +444,20 @@ const App: React.FC = () => {
         setPlayerBuffs([]);
 
         const battleDeck = shuffle(sourceDeck);
-        setDeck(battleDeck);
-        
+
         const nextEnemy = getEnemyForLevel(nextLvl);
         setCurrentEnemy(nextEnemy);
         setEnemyHealth(nextEnemy.baseHP);
         setBattleEvent(nextEnemy.trait || DEFAULT_EVENT);
-        
-        const nextHand = battleDeck.slice(0, 3);
+
+        // handSize枚引く（デッキから引いた分を除く）
+        const cardsToDraw = Math.min(handSize, battleDeck.length);
+        const nextHand = battleDeck.slice(0, cardsToDraw);
         setHand(nextHand);
+        setDeck(battleDeck.slice(cardsToDraw));
         return nextLvl;
     });
-  }, [permanentDeck, maxMana]);
+  }, [permanentDeck, maxMana, handSize]);
 
   const generateShopInventory = () => {
     if (!gameData) return;
@@ -662,16 +695,16 @@ const App: React.FC = () => {
             setGameState('GAME_OVER');
           } else {
             setTurnResetMessage(true);
-            const cardsToRecycle = [...currentStack];
-            const newDeck = shuffle([...currentDeck, ...cardsToRecycle]);
-            setDeck(newDeck);
-            setStack([]);
-            setCurrentComboPower(0);
             setCurrentHaste(heroStats.sp); // ヘイストをリセット
             setTimeout(() => {
               setTurnResetMessage(false);
-              const nextHand = newDeck.slice(0, 3);
-              setHand(nextHand);
+              // 手札がhandSize未満なら、handSizeまで引く
+              const currentHandCount = hand.length;
+              const needToDraw = Math.max(0, handSize - currentHandCount);
+              if (needToDraw > 0) {
+                // drawHandを使って引く（山札が足りなければ捨て札をリサイクル）
+                drawHand(currentDeck, heroStats.sp, currentStack, handSize);
+              }
             }, 1000);
           }
         }, 500);
@@ -705,20 +738,28 @@ const App: React.FC = () => {
   };
 
   const selectSkill = (skill: Skill) => {
-    if (currentHaste <= 0 || mana < skill.manaCost || isTargetMet || isMonsterAttacking || turnResetMessage) return;
+    if (currentHaste <= 0 || mana < skill.manaCost || isTargetMet || isMonsterAttacking || turnResetMessage || isShuffling) return;
 
     setProjectile({ icon: skill.icon, id: generateId() });
 
-    // 山札からカードを抜く
+    // 手札から使用カードを削除
+    let newHand = hand.filter(h => h.id !== skill.id);
+
+    // 山札からカードを抜く（手札にあったカードなので通常は山札にはない）
     let newDeck = deck.filter(d => d.id !== skill.id);
 
-    // ファイナルスラッシュ発動時の特殊処理：山札から全ての「スラッシュ」を消す → 使用済みに送る
-    let removedSlashes: Skill[] = [];
+    // ファイナルスラッシュ発動時の特殊処理：手札・山札の「スラッシュ」を捨て札へ
+    let removedCards: Skill[] = [];
     if (skill.name === 'ファイナルスラッシュ') {
-        removedSlashes = newDeck.filter(d => d.name.includes('スラッシュ'));
-        newDeck = newDeck.filter(d => !d.name.includes('スラッシュ'));
+        // 手札と山札から「スラッシュ」の名前を持つカードを捨て札に送る
+        const handSlashes = newHand.filter(c => c.name.includes('スラッシュ'));
+        const deckSlashes = newDeck.filter(c => c.name.includes('スラッシュ'));
+        removedCards = [...handSlashes, ...deckSlashes];
+        newHand = newHand.filter(c => !c.name.includes('スラッシュ'));
+        newDeck = newDeck.filter(c => !c.name.includes('スラッシュ'));
     }
 
+    setHand(newHand);
     setDeck(newDeck);
 
     // ディレイ計算（物理ヘイスト半減パッシブ対応 + physical_chain_haste効果）
@@ -746,7 +787,7 @@ const App: React.FC = () => {
         const newHaste = Math.round(currentHaste - actualDelay);
         setCurrentHaste(newHaste);
 
-        let newStack = [...stack, skill, ...removedSlashes];
+        let newStack = [...stack, skill, ...removedCards];
 
         // アタックカードの場合、すべてのchargeバフを消費して合計発動回数を計算
         let repeatCount = 1;
@@ -865,9 +906,11 @@ const App: React.FC = () => {
         // ヘイストが0以下になったら敵の攻撃
         if (newHaste <= 0) {
              handleEnemyAttack(newStack, newDeck);
-        } else {
+        } else if (newHand.length === 0) {
+            // 手札が0枚になったらドロー
             drawHand(newDeck, newHaste, newStack);
         }
+        // 手札が残っている場合はそのまま（ドローしない）
     }, 450);
   };
 
@@ -1558,6 +1601,15 @@ const App: React.FC = () => {
                             </div>
                           </div>
                         )}
+                        {isShuffling && (
+                          <div className="absolute inset-0 z-50 flex items-center justify-center animate-in zoom-in duration-300">
+                            <div className="bg-slate-950/80 backdrop-blur-sm border border-indigo-500/50 px-6 py-3 rounded-xl flex flex-col items-center shadow-2xl">
+                                <RefreshCw className="text-indigo-400 mb-2 animate-spin" size={32} />
+                                <h3 className="text-indigo-400 font-fantasy font-bold text-xl tracking-widest uppercase">Shuffling</h3>
+                                <p className="text-slate-300 text-[10px] mt-1">捨て札を山札に戻しています...</p>
+                            </div>
+                          </div>
+                        )}
                         {/* 敵名（中央上部） */}
                         <div className="absolute top-2 left-1/2 transform -translate-x-1/2 z-20">
                             <div className="px-3 py-0.5 bg-slate-900/90 border border-slate-700 rounded text-[0.625rem] font-black uppercase tracking-[0.1em] text-slate-300 shadow-lg">{currentEnemy.name}</div>
@@ -1814,21 +1866,23 @@ const App: React.FC = () => {
                       <div className="flex flex-col gap-0">
                         {/* ライフ表示 */}
                         <div className="flex justify-end items-center mb-0.5">
-                          <div className="flex items-center gap-1">
-                            <span className="text-[0.5rem] font-black text-slate-400 uppercase">Life</span>
-                            <div className="flex items-center gap-0.5">
-                              {[...Array(maxLife)].map((_, i) => (
-                                <Heart
-                                  key={i}
-                                  className={`w-4 h-4 transition-all duration-300 ${
-                                    i < life
-                                      ? 'text-red-500 fill-red-500 drop-shadow-[0_0_4px_rgba(239,68,68,0.5)]'
-                                      : 'text-slate-700 fill-slate-800'
-                                  }`}
-                                />
-                              ))}
+                          <Tooltip content={"ライフが0になると敗北。\nダメージを受けると、手札の最大枚数までカードを引ける。"}>
+                            <div className="flex items-center gap-1 cursor-pointer hover:bg-slate-800/50 rounded px-1 transition-colors">
+                              <span className="text-[0.5rem] font-black text-slate-400 uppercase">Life</span>
+                              <div className="flex items-center gap-0.5">
+                                {[...Array(maxLife)].map((_, i) => (
+                                  <Heart
+                                    key={i}
+                                    className={`w-4 h-4 transition-all duration-300 ${
+                                      i < life
+                                        ? 'text-red-500 fill-red-500 drop-shadow-[0_0_4px_rgba(239,68,68,0.5)]'
+                                        : 'text-slate-700 fill-slate-800'
+                                    }`}
+                                  />
+                                ))}
+                              </div>
                             </div>
-                          </div>
+                          </Tooltip>
                         </div>
 
                         {/* ゲージ行 */}
@@ -1951,13 +2005,13 @@ const App: React.FC = () => {
                       </div>
                     </div>
 
-                    <div className="flex flex-col gap-2 md:gap-4 flex-1 min-h-0">
+                    <div className="flex flex-col gap-2 md:gap-4 flex-1 min-h-[15rem]">
                         {hand.length > 0 ? (
-                            <div className="flex justify-center gap-1.5 md:gap-3 animate-in slide-in-from-bottom-4 overflow-x-auto pb-2 px-2 scrollbar-thin scrollbar-thumb-slate-600 scrollbar-track-slate-800">
-                                {hand.map((item, idx) => <div key={`hand-${item.id}-${idx}`} className="flex-shrink-0"><Card skill={item} onClick={() => selectSkill(item)} disabled={isTargetMet || isMonsterAttacking || turnResetMessage} mana={mana} currentHaste={currentHaste} heroStats={heroStats} physicalMultiplier={battleEvent.physicalMultiplier} magicMultiplier={battleEvent.magicMultiplier} effectsDisabled={isEffectDisabled(item)} lastCardWasPhysical={wasLastCardPhysical()} deckSlashCount={deckSlashCount} enemyDamageTaken={enemyDamageTaken} /></div>)}
+                            <div className="flex justify-center gap-1.5 md:gap-3 animate-in slide-in-from-bottom-4 overflow-x-auto pb-2 px-2 scrollbar-thin scrollbar-thumb-slate-600 scrollbar-track-slate-800 min-h-[14rem]">
+                                {hand.map((item, idx) => <div key={`hand-${item.id}-${idx}`} className="flex-shrink-0"><Card skill={item} onClick={() => selectSkill(item)} disabled={isTargetMet || isMonsterAttacking || turnResetMessage || isShuffling} mana={mana} currentHaste={currentHaste} heroStats={heroStats} physicalMultiplier={battleEvent.physicalMultiplier} magicMultiplier={battleEvent.magicMultiplier} effectsDisabled={isEffectDisabled(item)} lastCardWasPhysical={wasLastCardPhysical()} deckSlashCount={deckSlashCount} enemyDamageTaken={enemyDamageTaken} /></div>)}
                             </div>
                         ) : (
-                            <div className="flex-1 flex items-center justify-center text-center p-4">
+                            <div className="flex-1 flex items-center justify-center text-center p-4 min-h-[14rem]">
                                 <span className="text-slate-500 font-bold text-[10px] uppercase tracking-widest block">手札がなくなりました</span>
                             </div>
                         )}

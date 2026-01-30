@@ -72,21 +72,23 @@ const PlayerStatusPanel: React.FC<PlayerStatusPanelProps> = ({
             </button>
           )}
         </div>
-        <div className="flex items-center gap-1">
-          <span className="text-[0.5rem] font-black text-slate-400 uppercase">Life</span>
-          <div className="flex items-center gap-0.5">
-            {[...Array(maxLife)].map((_, i) => (
-              <Heart
-                key={i}
-                className={`w-4 h-4 transition-all duration-300 ${
-                  i < life
-                    ? 'text-red-500 fill-red-500 drop-shadow-[0_0_4px_rgba(239,68,68,0.5)]'
-                    : 'text-slate-700 fill-slate-800'
-                }`}
-              />
-            ))}
+        <Tooltip content={"ライフが0になると敗北。\nダメージを受けると、手札の最大枚数までカードを引ける。"}>
+          <div className="flex items-center gap-1 cursor-pointer hover:bg-slate-800/50 rounded px-1 transition-colors">
+            <span className="text-[0.5rem] font-black text-slate-400 uppercase">Life</span>
+            <div className="flex items-center gap-0.5">
+              {[...Array(maxLife)].map((_, i) => (
+                <Heart
+                  key={i}
+                  className={`w-4 h-4 transition-all duration-300 ${
+                    i < life
+                      ? 'text-red-500 fill-red-500 drop-shadow-[0_0_4px_rgba(239,68,68,0.5)]'
+                      : 'text-slate-700 fill-slate-800'
+                  }`}
+                />
+              ))}
+            </div>
           </div>
-        </div>
+        </Tooltip>
       </div>
 
       {/* HASTEゲージ */}

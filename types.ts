@@ -84,6 +84,7 @@ export interface Skill {
   borderRadiusClass: string;
   effect?: SkillEffect;
   rarity: Rarity;
+  flavorText?: string;    // 目立たない補足テキスト
 }
 
 export interface BattleEvent {
@@ -116,7 +117,7 @@ export interface PassiveEffect {
   name: string;
   icon: string;
   description: string;
-  type: 'score_flat' | 'capacity_boost' | 'score_mult' | 'adjacency_to_mult' | 'sauce_mult_add' | 'max_life_boost' | 'flat_damage_bonus' | 'category_buff' | 'ad_boost' | 'ap_boost' | 'ap_mana_boost' | 'physical_haste_reduction';
+  type: 'score_flat' | 'capacity_boost' | 'score_mult' | 'adjacency_to_mult' | 'sauce_mult_add' | 'max_life_boost' | 'flat_damage_bonus' | 'category_buff' | 'ad_boost' | 'ap_boost' | 'ap_mana_boost' | 'physical_haste_reduction' | 'hand_size_boost' | 'gold_bonus';
   value: number;
   value2?: number;  // 複合効果用（ap_mana_boostのマナ値など）
   rarity: Rarity;

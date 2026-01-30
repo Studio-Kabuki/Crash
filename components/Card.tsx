@@ -279,10 +279,18 @@ export const Card: React.FC<CardProps> = ({
               )}
             </div>
           )}
-          {/* 説明文 */}
-          <p className={`text-[0.55rem] text-center leading-relaxed font-medium ${effectsDisabled ? 'text-slate-600 line-through' : 'text-slate-300'}`}>
-              {skill.effect ? skill.effect.description : "通常技"}
-          </p>
+          {/* 効果説明（目立つ） */}
+          {skill.effect?.description && (
+            <p className={`text-[0.55rem] text-center leading-relaxed font-medium whitespace-pre-line ${effectsDisabled ? 'text-slate-600 line-through' : 'text-slate-300'}`}>
+                {skill.effect.description.replace(/\\n/g, '\n')}
+            </p>
+          )}
+          {/* フレーバーテキスト（目立たない） */}
+          {skill.flavorText && (
+            <p className="text-[0.5rem] text-center leading-relaxed whitespace-pre-line text-slate-500 italic mt-0.5">
+                {skill.flavorText.replace(/\\n/g, '\n')}
+            </p>
+          )}
       </div>
 
       {!canAfford && (
