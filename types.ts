@@ -8,13 +8,16 @@ export type EffectType =
   | 'permanent_power_up'   // 永続パワーアップ
   | 'deck_slash_bonus'     // 山札のスラッシュ枚数ボーナス
   | 'add_buff'             // バフを付与
-  | 'stat_buff';           // ステータスバフ（戦闘中）
+  | 'stat_buff'            // ステータスバフ（戦闘中）
+  | 'physical_chain_haste' // 物理チェーン時ヘイスト減少
+  | 'enemy_damage_taken';  // 敵の減少HP分のダメージ
 
 // バフタイプ
 export type BuffType =
-  | 'charge'       // ためる（次のアタックを複数回発動）
-  | 'stat_up'      // ステータスアップ
-  | 'stat_down';   // ステータスダウン
+  | 'charge'            // ためる（次のアタックを複数回発動）
+  | 'stat_up'           // ステータスアップ
+  | 'stat_down'         // ステータスダウン
+  | 'base_damage_boost'; // ベースダメージ倍化（スタック制）
 
 // プレイヤーのバフ/デバフ
 export interface PlayerBuff {
@@ -37,7 +40,7 @@ export type EffectTrigger =
 // カード分類
 export type CardType = 'attack' | 'support';
 
-export type Rarity = 'SSR' | 'R' | 'C';
+export type Rarity = 'SSR' | 'SR' | 'R' | 'C';
 
 // 主人公のパラメータ
 export interface HeroStats {
@@ -126,4 +129,8 @@ export interface CardProps {
   physicalMultiplier?: number;
   magicMultiplier?: number;
   effectsDisabled?: boolean;
+  lastCardWasPhysical?: boolean;  // 前のカードが物理ダメージだったか
+  // 能力ダメージ計算用
+  deckSlashCount?: number;        // デッキ内のスラッシュ枚数
+  enemyDamageTaken?: number;      // 敵の減少HP（最大HP - 現在HP）
 }

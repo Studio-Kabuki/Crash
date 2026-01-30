@@ -170,9 +170,12 @@ const App: React.FC = () => {
   };
 
   const debugRerollHand = () => {
+    // 手札をデッキに戻してシャッフル
     const newDeck = shuffle([...deck, ...hand]);
-    setDeck(newDeck);
+    // 最初の3枚を新しい手札として取る
     const newHand = newDeck.slice(0, 3);
+    // デッキから手札分を除く
+    setDeck(newDeck.slice(3));
     setHand(newHand);
   };
 
@@ -199,13 +202,39 @@ const App: React.FC = () => {
       return;
     }
 
+    const valueToAdd = customValue ?? buffDef.defaultValue;
+
+    // base_damage_boostの場合、既存のバフがあればスタックを加算
+    if (buffDef.type === 'base_damage_boost') {
+      setPlayerBuffs(prev => {
+        const existingBuff = prev.find(b => b.type === 'base_damage_boost');
+        if (existingBuff) {
+          return prev.map(b =>
+            b.type === 'base_damage_boost' ? { ...b, value: b.value + valueToAdd } : b
+          );
+        } else {
+          const newBuff: PlayerBuff = {
+            id: generateId(),
+            type: buffDef.type,
+            name: buffDef.name,
+            icon: buffDef.icon,
+            description: buffDef.description,
+            value: valueToAdd,
+            stat: buffDef.stat
+          };
+          return [...prev, newBuff];
+        }
+      });
+      return;
+    }
+
     const newBuff: PlayerBuff = {
       id: generateId(),
       type: buffDef.type,
       name: buffDef.name,
       icon: buffDef.icon,
       description: buffDef.description,
-      value: customValue ?? buffDef.defaultValue,
+      value: valueToAdd,
       stat: buffDef.stat
     };
 
@@ -501,9 +530,22 @@ const App: React.FC = () => {
     return skill.cardType === 'support';  // サポートカードのみ無効化
   };
 
+  // BASE_DOUBLEバフのスタック数を取得
+  const getBaseDoubleStacks = (): number => {
+    const baseDoubleBuff = playerBuffs.find(b => b.type === 'base_damage_boost');
+    return baseDoubleBuff ? baseDoubleBuff.value : 0;
+  };
+
   // スキルの基本ダメージを計算（基礎ダメージも倍率適用）
-  const getSkillBaseDamage = (s: Skill) => {
-    const baseDmg = s.baseDamage || 0;
+  const getSkillBaseDamage = (s: Skill, applyBaseDouble: boolean = true) => {
+    let baseDmg = s.baseDamage || 0;
+
+    // BASE_DOUBLEバフがあればベースダメージを2倍
+    if (applyBaseDouble && getBaseDoubleStacks() > 0 && baseDmg > 0) {
+      baseDmg = baseDmg * 2;
+    }
+
+    // マイナス係数は「係数なし」として扱う（ベースダメージのみ攻撃）
     const hasPhysical = s.adRatio > 0;
     const hasMagic = s.apRatio > 0;
 
@@ -520,13 +562,15 @@ const App: React.FC = () => {
       // 魔法のみ: 魔法倍率を適用
       scaledBaseDmg = Math.floor(baseDmg * battleEvent.magicMultiplier);
     } else {
-      // 係数なし: 倍率の影響を受けない（真のダメージ）
+      // 係数なし（マイナス係数含む）: 倍率の影響を受けない（真のダメージ）
       scaledBaseDmg = baseDmg;
     }
 
+    // マイナス係数の場合はベースダメージから差し引く
     const physicalDmg = Math.floor(heroStats.ad * s.adRatio / 100 * battleEvent.physicalMultiplier);
     const magicDmg = Math.floor(heroStats.ap * s.apRatio / 100 * battleEvent.magicMultiplier);
-    return scaledBaseDmg + physicalDmg + magicDmg;
+    // ダメージは0未満にならない
+    return Math.max(0, scaledBaseDmg + physicalDmg + magicDmg);
   };
 
   // chargeバフがあるかチェック（ダメージ表示用）
@@ -534,6 +578,17 @@ const App: React.FC = () => {
     const chargeBuff = playerBuffs.find(b => b.type === 'charge');
     return chargeBuff ? chargeBuff.value : 1;
   };
+
+  // 前のカードが物理ダメージだったかチェック
+  const wasLastCardPhysical = (): boolean => {
+    if (stack.length === 0) return false;
+    const lastCard = stack[stack.length - 1];
+    return lastCard.adRatio > 0;  // 物理係数があれば物理ダメージとみなす
+  };
+
+  // 能力ダメージ計算用の値
+  const deckSlashCount = deck.filter(d => d.name.includes('スラッシュ')).length;
+  const enemyDamageTaken = currentEnemy.baseHP - enemyHealth;
 
   const calculateComboPower = (skills: Skill[], chargeMultiplier: number = 1) => {
     let basePower = 0;
@@ -546,6 +601,11 @@ const App: React.FC = () => {
             const targetName = s.effect.params.targetName || 'スラッシュ';
             const slashCount = deck.filter(d => d.name.includes(targetName)).length;
             p += (slashCount * (s.effect.params.value || 0));
+          }
+          if (s.effect.type === 'enemy_damage_taken') {
+            // 祖国のために：敵の減少HP×係数のダメージ
+            const ratio = (s.effect.params.value || 100) / 100;
+            p += Math.floor(enemyDamageTaken * ratio);
           }
         }
 
@@ -631,10 +691,18 @@ const App: React.FC = () => {
 
     setDeck(newDeck);
 
-    // ディレイ計算（物理ヘイスト半減パッシブ対応）
+    // ディレイ計算（物理ヘイスト半減パッシブ対応 + physical_chain_haste効果）
     const hasPhysicalHasteReduction = passives.some(p => p.type === 'physical_haste_reduction');
     const isPhysicalOnly = skill.adRatio > 0 && skill.apRatio === 0;
-    const actualDelay = Math.round(hasPhysicalHasteReduction && isPhysicalOnly ? skill.delay / 2 : skill.delay);
+    let baseDelay = skill.delay;
+
+    // physical_chain_haste効果: 前のカードが物理ならヘイスト減少
+    if (skill.effect?.type === 'physical_chain_haste' && wasLastCardPhysical()) {
+      const hasteBonus = skill.effect.params.value || 10;
+      baseDelay = Math.max(0, baseDelay - hasteBonus);
+    }
+
+    const actualDelay = Math.round(hasPhysicalHasteReduction && isPhysicalOnly ? baseDelay / 2 : baseDelay);
 
     setTimeout(() => {
         setIsMonsterShaking(true);
@@ -660,6 +728,23 @@ const App: React.FC = () => {
             // すべてのchargeバフを消費
             setPlayerBuffs(prev => prev.filter(b => b.type !== 'charge'));
           }
+        }
+
+        // ベースダメージを持つカードの場合、BASE_DOUBLEバフを1スタック消費
+        if (skill.baseDamage > 0) {
+          setPlayerBuffs(prev => {
+            const baseDoubleBuff = prev.find(b => b.type === 'base_damage_boost');
+            if (baseDoubleBuff && baseDoubleBuff.value > 1) {
+              // スタックを1減らす
+              return prev.map(b =>
+                b.type === 'base_damage_boost' ? { ...b, value: b.value - 1 } : b
+              );
+            } else if (baseDoubleBuff && baseDoubleBuff.value === 1) {
+              // 最後の1スタックなのでバフを削除
+              return prev.filter(b => b.type !== 'base_damage_boost');
+            }
+            return prev;
+          });
         }
 
         const newTotalPower = calculateComboPower(newStack);
@@ -1473,6 +1558,8 @@ const App: React.FC = () => {
                                       ? 'bg-yellow-900/50 border-yellow-600'
                                       : buff.type === 'stat_up'
                                       ? 'bg-green-900/50 border-green-600'
+                                      : buff.type === 'base_damage_boost'
+                                      ? 'bg-cyan-900/50 border-cyan-600'
                                       : 'bg-red-900/50 border-red-600'
                                   }`}
                                 >
@@ -1482,10 +1569,13 @@ const App: React.FC = () => {
                                       ? 'text-yellow-400'
                                       : buff.type === 'stat_up'
                                       ? 'text-green-400'
+                                      : buff.type === 'base_damage_boost'
+                                      ? 'text-cyan-400'
                                       : 'text-red-400'
                                   }`}>
                                     {buff.name}
                                     {buff.stat && ` +${buff.value}`}
+                                    {buff.type === 'base_damage_boost' && ` x${buff.value}`}
                                   </span>
                                 </div>
                               </Tooltip>
@@ -1498,7 +1588,7 @@ const App: React.FC = () => {
                     <div className="flex flex-col gap-2 md:gap-4 flex-1">
                         {hand.length > 0 ? (
                             <div className="flex justify-center gap-1.5 md:gap-3 animate-in slide-in-from-bottom-4 overflow-x-auto pb-1.5 no-scrollbar">
-                                {hand.map((item) => <div key={item.id} className="flex-1 max-w-[30%]"><Card skill={item} onClick={() => selectSkill(item)} disabled={isTargetMet || isMonsterAttacking || turnResetMessage} mana={mana} currentHaste={currentHaste} heroStats={heroStats} physicalMultiplier={battleEvent.physicalMultiplier} magicMultiplier={battleEvent.magicMultiplier} effectsDisabled={isEffectDisabled(item)} /></div>)}
+                                {hand.map((item, idx) => <div key={`hand-${item.id}-${idx}`} className="flex-1 max-w-[30%]"><Card skill={item} onClick={() => selectSkill(item)} disabled={isTargetMet || isMonsterAttacking || turnResetMessage} mana={mana} currentHaste={currentHaste} heroStats={heroStats} physicalMultiplier={battleEvent.physicalMultiplier} magicMultiplier={battleEvent.magicMultiplier} effectsDisabled={isEffectDisabled(item)} lastCardWasPhysical={wasLastCardPhysical()} deckSlashCount={deckSlashCount} enemyDamageTaken={enemyDamageTaken} /></div>)}
                             </div>
                         ) : (
                             <div className="flex-1 flex items-center justify-center text-center p-4">

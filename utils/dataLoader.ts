@@ -118,7 +118,7 @@ export const DEFAULT_EVENT = TRAITS.NEUTRAL;
 // バフ定義（プレイヤーに付与されるバフ/デバフ）
 export interface BuffDefinition {
   id: string;
-  type: 'charge' | 'stat_up' | 'stat_down';
+  type: 'charge' | 'stat_up' | 'stat_down' | 'base_damage_boost';
   name: string;
   icon: string;
   description: string;
@@ -179,6 +179,14 @@ export const BUFFS: Record<string, BuffDefinition> = {
     description: '魔法攻撃力が低下',
     defaultValue: -30,
     stat: 'ap'
+  },
+  BASE_DOUBLE: {
+    id: 'base_double',
+    type: 'base_damage_boost',
+    name: '集中',
+    icon: 'https://img.icons8.com/fluency/144/meditation.png',
+    description: 'ベースダメージが2倍（スタック消費）',
+    defaultValue: 1
   }
 };
 
