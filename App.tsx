@@ -9,7 +9,7 @@ import {
   RotateCcw, Swords, Skull, Zap, ArrowRight, ScrollText,
   ShieldAlert, Sparkles, Ghost, Hexagon,
   CheckCircle2, Info, Award, Undo2, Layers, PlusCircle,
-  X, Search, Biohazard, Heart, Coffee, Coins, ShoppingCart, Check,
+  X, Search, Biohazard, Heart, HeartCrack, Coffee, Coins, ShoppingCart, Check,
   ZapOff, Star, BookOpen, Settings, RefreshCw
 } from 'lucide-react';
 
@@ -97,6 +97,9 @@ const App: React.FC = () => {
   // Ability Reward Overlay State (エリート撃破後)
   const [isAbilityRewardOverlayOpen, setIsAbilityRewardOverlayOpen] = useState<boolean>(false);
 
+  // Ability List Overlay State (所持アビリティ一覧)
+  const [isAbilityListOverlayOpen, setIsAbilityListOverlayOpen] = useState<boolean>(false);
+
   // Debug Menu Overlay State
   const [isDebugOpen, setIsDebugOpen] = useState<boolean>(false);
 
@@ -115,7 +118,7 @@ const App: React.FC = () => {
   const [turnResetMessage, setTurnResetMessage] = useState<boolean>(false);
 
   const [projectile, setProjectile] = useState<{ icon: string; id: string } | null>(null);
-  const [currentEnemy, setCurrentEnemy] = useState<Enemy>({ name: '', icon: '', baseHP: 0, minFloor: 0, maxFloor: 0 });
+  const [currentEnemy, setCurrentEnemy] = useState<Enemy>({ name: '', icon: '', baseHP: 0, minFloor: 0, maxFloor: 0, dropsAbility: 'N' });
   const [enemyHealth, setEnemyHealth] = useState<number>(0);
   const [floatingDamages, setFloatingDamages] = useState<{ id: string; value: number; isMana?: boolean; isPoison?: boolean }[]>([]);
 
@@ -317,7 +320,7 @@ const App: React.FC = () => {
     return newArr;
   };
 
-  // 手札を引く
+  // 手札を引く（毎回シャッフルしてから引く）
   const drawHand = useCallback((currentDeck: Skill[], remainingHaste: number, currentStack?: Skill[]) => {
     if (remainingHaste <= 0) {
       setHand([]);
@@ -338,8 +341,10 @@ const App: React.FC = () => {
       return;
     }
 
-    const newHand = currentDeck.slice(0, 3);
-    setHand(newHand);
+    // カード使用後は毎回デッキをシャッフルして手札を引く
+    const shuffledDeck = shuffle([...currentDeck]);
+    setDeck(shuffledDeck.slice(3)); // 手札分を除いた残りをデッキに
+    setHand(shuffledDeck.slice(0, 3));
   }, [permanentDeck, stack, hand]);
 
   const getEnemyForLevel = (lvl: number) => {
@@ -522,7 +527,7 @@ const App: React.FC = () => {
     setIsAbilityRewardOverlayOpen(false);
 
     // エリート(Y)ならカード選択へ、ザコ(C)なら次のバトルへ
-    if (enemy?.dropsAbility === 'Y') {
+    if (currentEnemy?.dropsAbility === 'Y') {
       generateCardRewards();
       setGameState('CARD_REWARD');
       setIsCardRewardOverlayOpen(true);
@@ -707,8 +712,10 @@ const App: React.FC = () => {
     // 山札からカードを抜く
     let newDeck = deck.filter(d => d.id !== skill.id);
 
-    // ファイナルスラッシュ発動時の特殊処理：山札から全ての「スラッシュ」を消す
+    // ファイナルスラッシュ発動時の特殊処理：山札から全ての「スラッシュ」を消す → 使用済みに送る
+    let removedSlashes: Skill[] = [];
     if (skill.name === 'ファイナルスラッシュ') {
+        removedSlashes = newDeck.filter(d => d.name.includes('スラッシュ'));
         newDeck = newDeck.filter(d => !d.name.includes('スラッシュ'));
     }
 
@@ -739,7 +746,7 @@ const App: React.FC = () => {
         const newHaste = Math.round(currentHaste - actualDelay);
         setCurrentHaste(newHaste);
 
-        let newStack = [...stack, skill];
+        let newStack = [...stack, skill, ...removedSlashes];
 
         // アタックカードの場合、すべてのchargeバフを消費して合計発動回数を計算
         let repeatCount = 1;
@@ -834,7 +841,7 @@ const App: React.FC = () => {
         if (enemyHealth - finalDamage <= 0) {
             setGold(prev => prev + 40);
             setTimeout(() => {
-                const dropType = enemy?.dropsAbility || 'N';
+                const dropType = currentEnemy?.dropsAbility || 'N';
                 if (dropType === 'Y') {
                     // エリート: 全レアリティアビリティ→カード
                     setGameState('BOSS_VICTORY');
@@ -842,7 +849,7 @@ const App: React.FC = () => {
                     setIsAbilityRewardOverlayOpen(true);
                 } else if (dropType === 'C') {
                     // ザコ: コモンアビリティのみ→カードなし
-                    setGameState('BOSS_VICTORY');
+                    setGameState('ABILITY_REWARD');
                     generateShopOptions(true);
                     setIsAbilityRewardOverlayOpen(true);
                 } else {
@@ -968,6 +975,68 @@ const App: React.FC = () => {
               </div>
             </div>
             <button onClick={() => setIsDeckOverlayOpen(false)} className="mt-4 w-full bg-slate-800 hover:bg-slate-700 py-3 rounded-xl font-bold uppercase tracking-widest text-sm">Close Viewer</button>
+          </div>
+        </div>
+      )}
+
+      {/* ABILITY LIST OVERLAY */}
+      {isAbilityListOverlayOpen && (
+        <div className="fixed inset-0 z-[100] bg-slate-900/50 backdrop-blur p-4 flex flex-col animate-in fade-in duration-300">
+          <div className="w-full max-w-sm md:max-w-md lg:max-w-lg mx-auto flex flex-col h-full">
+            <div className="flex justify-between items-center mb-4 pb-4 border-b border-slate-800">
+              <div className="flex items-center gap-3">
+                <Award className="text-purple-400" size={24} />
+                <h2 className="font-fantasy text-2xl tracking-[0.2em] uppercase text-slate-100">Abilities</h2>
+                <span className="text-slate-500 text-sm font-bold bg-slate-900 px-3 py-1 rounded-full">{passives.length} ABILITIES</span>
+              </div>
+              <button onClick={() => setIsAbilityListOverlayOpen(false)} className="p-2 hover:bg-slate-800 rounded-full text-slate-400 hover:text-white"><X size={28} /></button>
+            </div>
+            <div className="flex-1 overflow-y-auto no-scrollbar pb-10">
+              {passives.length === 0 ? (
+                <div className="flex flex-col items-center justify-center h-full text-slate-500">
+                  <Award size={48} className="mb-4 opacity-50" />
+                  <p className="text-sm">まだアビリティを持っていません</p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 gap-3">
+                  {passives.map((passive, idx) => (
+                    <div
+                      key={`${passive.id}-${idx}`}
+                      className={`p-4 rounded-xl border-2 ${
+                        passive.rarity === 'SSR' ? 'bg-gradient-to-br from-yellow-900/30 to-orange-900/30 border-yellow-500/50' :
+                        passive.rarity === 'SR' ? 'bg-gradient-to-br from-purple-900/30 to-pink-900/30 border-purple-500/50' :
+                        passive.rarity === 'R' ? 'bg-gradient-to-br from-blue-900/30 to-cyan-900/30 border-blue-500/50' :
+                        'bg-slate-800/50 border-slate-600/50'
+                      }`}
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="w-12 h-12 rounded-lg bg-slate-900/50 flex items-center justify-center overflow-hidden">
+                          <SafeImage src={passive.icon} alt={passive.name} className="w-10 h-10 object-contain" />
+                        </div>
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2">
+                            <span className={`text-sm font-black ${
+                              passive.rarity === 'SSR' ? 'text-yellow-400' :
+                              passive.rarity === 'SR' ? 'text-purple-400' :
+                              passive.rarity === 'R' ? 'text-blue-400' :
+                              'text-slate-300'
+                            }`}>{passive.name}</span>
+                            <span className={`text-[8px] font-black px-1.5 py-0.5 rounded ${
+                              passive.rarity === 'SSR' ? 'bg-yellow-500/30 text-yellow-300' :
+                              passive.rarity === 'SR' ? 'bg-purple-500/30 text-purple-300' :
+                              passive.rarity === 'R' ? 'bg-blue-500/30 text-blue-300' :
+                              'bg-slate-600/30 text-slate-400'
+                            }`}>{passive.rarity}</span>
+                          </div>
+                          <p className="text-[10px] text-slate-400 mt-1">{passive.description}</p>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+            <button onClick={() => setIsAbilityListOverlayOpen(false)} className="mt-4 w-full bg-slate-800 hover:bg-slate-700 py-3 rounded-xl font-bold uppercase tracking-widest text-sm">Close Viewer</button>
           </div>
         </div>
       )}
@@ -1170,6 +1239,12 @@ const App: React.FC = () => {
                 </button>
               ))}
             </div>
+            <button
+              onClick={() => { setIsAbilityRewardOverlayOpen(false); handleBattleWinFinish(permanentDeck); }}
+              className="w-full bg-slate-800 hover:bg-slate-700 py-3 rounded-xl font-bold uppercase tracking-widest text-sm text-slate-400 hover:text-white transition-all"
+            >
+              スキップして進む
+            </button>
           </div>
         </div>
       )}
@@ -1500,12 +1575,17 @@ const App: React.FC = () => {
                           </button>
                         </div>
 
-                        {/* デッキビュワーボタン（左下） */}
-                        <div className="absolute bottom-1 left-1 md:bottom-2 md:left-2 z-40">
+                        {/* デッキビュワーボタン・アビリティボタン（左下） */}
+                        <div className="absolute bottom-1 left-1 md:bottom-2 md:left-2 z-40 flex items-center gap-1">
                           <button onClick={() => setIsDeckOverlayOpen(true)} className="flex items-center gap-1.5 px-2 py-1 bg-slate-900/90 backdrop-blur-md border border-indigo-500/40 rounded-lg text-[9px] font-black text-indigo-300 uppercase tracking-widest hover:bg-slate-800 transition-all shadow-xl">
                             <Layers size={12} />
                             <span>DECK</span>
                             <span className="px-1.5 py-0.5 bg-indigo-600 rounded text-white text-[8px]">{deck.length}</span>
+                          </button>
+                          <button onClick={() => setIsAbilityListOverlayOpen(true)} className="flex items-center gap-1.5 px-2 py-1 bg-slate-900/90 backdrop-blur-md border border-purple-500/40 rounded-lg text-[9px] font-black text-purple-300 uppercase tracking-widest hover:bg-slate-800 transition-all shadow-xl">
+                            <Award size={12} />
+                            <span>ABILITY</span>
+                            <span className="px-1.5 py-0.5 bg-purple-600 rounded text-white text-[8px]">{passives.length}</span>
                           </button>
                         </div>
 
@@ -1530,12 +1610,12 @@ const App: React.FC = () => {
 
                         {/* 敵のtrait表示 */}
                         {battleEvent.title && (
-                          <div className={`mt-2 px-3 py-1 rounded-lg border ${battleEvent.type === 'positive' ? 'bg-green-900/50 border-green-600' : 'bg-red-900/50 border-red-600'} z-20`}>
+                          <div className={`mt-3 px-4 py-2 rounded-lg border ${battleEvent.type === 'positive' ? 'bg-green-900/50 border-green-600' : 'bg-red-900/50 border-red-600'} z-20`}>
                             <div className="flex items-center gap-2">
-                              <Zap size={12} className={battleEvent.type === 'positive' ? 'text-green-400' : 'text-red-400'} />
-                              <span className="text-[9px] font-black text-white uppercase tracking-wider">{battleEvent.title}</span>
+                              <Zap size={18} className={battleEvent.type === 'positive' ? 'text-green-400' : 'text-red-400'} />
+                              <span className="text-sm font-black text-white uppercase tracking-wider">{battleEvent.title}</span>
                             </div>
-                            <p className="text-[7px] text-slate-300 mt-0.5">{battleEvent.description}</p>
+                            <p className="text-[11px] text-slate-300 mt-1">{battleEvent.description}</p>
                           </div>
                         )}
 
@@ -1548,12 +1628,17 @@ const App: React.FC = () => {
 
                 {gameState === 'CARD_REWARD' && (
                     <div className="relative flex flex-col items-center justify-center w-full h-full animate-in zoom-in duration-500">
-                        {/* デッキビュワーボタン（左下）- バトル中と同じ */}
-                        <div className="absolute bottom-1 left-1 md:bottom-2 md:left-2 z-40">
+                        {/* デッキビュワーボタン・アビリティボタン（左下）- バトル中と同じ */}
+                        <div className="absolute bottom-1 left-1 md:bottom-2 md:left-2 z-40 flex items-center gap-1">
                           <button onClick={() => setIsDeckOverlayOpen(true)} className="flex items-center gap-1.5 px-2 py-1 bg-slate-900/90 backdrop-blur-md border border-indigo-500/40 rounded-lg text-[9px] font-black text-indigo-300 uppercase tracking-widest hover:bg-slate-800 transition-all shadow-xl">
                             <Layers size={12} />
                             <span>DECK</span>
                             <span className="px-1.5 py-0.5 bg-indigo-600 rounded text-white text-[8px]">{permanentDeck.length}</span>
+                          </button>
+                          <button onClick={() => setIsAbilityListOverlayOpen(true)} className="flex items-center gap-1.5 px-2 py-1 bg-slate-900/90 backdrop-blur-md border border-purple-500/40 rounded-lg text-[9px] font-black text-purple-300 uppercase tracking-widest hover:bg-slate-800 transition-all shadow-xl">
+                            <Award size={12} />
+                            <span>ABILITY</span>
+                            <span className="px-1.5 py-0.5 bg-purple-600 rounded text-white text-[8px]">{passives.length}</span>
                           </button>
                         </div>
 
@@ -1585,14 +1670,63 @@ const App: React.FC = () => {
                     </div>
                 )}
 
-                {gameState === 'BOSS_VICTORY' && (
+                {gameState === 'ABILITY_REWARD' && (
                     <div className="relative flex flex-col items-center justify-center w-full h-full animate-in zoom-in duration-500">
-                        {/* デッキビュワーボタン（左下）- バトル中と同じ */}
-                        <div className="absolute bottom-1 left-1 md:bottom-2 md:left-2 z-40">
+                        {/* デッキビュワーボタン・アビリティボタン（左下）- バトル中と同じ */}
+                        <div className="absolute bottom-1 left-1 md:bottom-2 md:left-2 z-40 flex items-center gap-1">
                           <button onClick={() => setIsDeckOverlayOpen(true)} className="flex items-center gap-1.5 px-2 py-1 bg-slate-900/90 backdrop-blur-md border border-indigo-500/40 rounded-lg text-[9px] font-black text-indigo-300 uppercase tracking-widest hover:bg-slate-800 transition-all shadow-xl">
                             <Layers size={12} />
                             <span>DECK</span>
                             <span className="px-1.5 py-0.5 bg-indigo-600 rounded text-white text-[8px]">{permanentDeck.length}</span>
+                          </button>
+                          <button onClick={() => setIsAbilityListOverlayOpen(true)} className="flex items-center gap-1.5 px-2 py-1 bg-slate-900/90 backdrop-blur-md border border-purple-500/40 rounded-lg text-[9px] font-black text-purple-300 uppercase tracking-widest hover:bg-slate-800 transition-all shadow-xl">
+                            <Award size={12} />
+                            <span>ABILITY</span>
+                            <span className="px-1.5 py-0.5 bg-purple-600 rounded text-white text-[8px]">{passives.length}</span>
+                          </button>
+                        </div>
+
+                        {/* 勝利アイコン（ザコ用） */}
+                        <div className="relative mb-6">
+                            <div className="w-32 h-32 bg-gradient-to-b from-green-900/50 to-emerald-950/50 rounded-full flex items-center justify-center border-4 border-green-600/50 shadow-[0_0_40px_rgba(34,197,94,0.3)]">
+                                <Award className="text-green-400" size={64} />
+                            </div>
+                            <div className="absolute -bottom-2 left-1/2 -translate-x-1/2 bg-green-600 px-4 py-1 rounded-full">
+                                <span className="text-xs font-black text-white uppercase tracking-widest">Victory!</span>
+                            </div>
+                        </div>
+
+                        {/* ボタン群 */}
+                        <div className="flex flex-col gap-3 w-48">
+                            <button
+                                onClick={() => setIsAbilityRewardOverlayOpen(true)}
+                                className="flex items-center justify-center gap-2 px-6 py-3 bg-green-600 hover:bg-green-500 rounded-xl text-sm font-black text-white uppercase tracking-widest transition-all shadow-lg hover:shadow-green-500/30"
+                            >
+                                <Award size={18} /> 報酬を見る
+                            </button>
+                            <button
+                                onClick={() => handleBattleWinFinish(permanentDeck)}
+                                className="flex items-center justify-center gap-2 px-6 py-3 bg-slate-700 hover:bg-slate-600 rounded-xl text-sm font-black text-slate-200 uppercase tracking-widest transition-all"
+                            >
+                                <ArrowRight size={18} /> スキップして進む
+                            </button>
+                        </div>
+                    </div>
+                )}
+
+                {gameState === 'BOSS_VICTORY' && (
+                    <div className="relative flex flex-col items-center justify-center w-full h-full animate-in zoom-in duration-500">
+                        {/* デッキビュワーボタン・アビリティボタン（左下）- バトル中と同じ */}
+                        <div className="absolute bottom-1 left-1 md:bottom-2 md:left-2 z-40 flex items-center gap-1">
+                          <button onClick={() => setIsDeckOverlayOpen(true)} className="flex items-center gap-1.5 px-2 py-1 bg-slate-900/90 backdrop-blur-md border border-indigo-500/40 rounded-lg text-[9px] font-black text-indigo-300 uppercase tracking-widest hover:bg-slate-800 transition-all shadow-xl">
+                            <Layers size={12} />
+                            <span>DECK</span>
+                            <span className="px-1.5 py-0.5 bg-indigo-600 rounded text-white text-[8px]">{permanentDeck.length}</span>
+                          </button>
+                          <button onClick={() => setIsAbilityListOverlayOpen(true)} className="flex items-center gap-1.5 px-2 py-1 bg-slate-900/90 backdrop-blur-md border border-purple-500/40 rounded-lg text-[9px] font-black text-purple-300 uppercase tracking-widest hover:bg-slate-800 transition-all shadow-xl">
+                            <Award size={12} />
+                            <span>ABILITY</span>
+                            <span className="px-1.5 py-0.5 bg-purple-600 rounded text-white text-[8px]">{passives.length}</span>
                           </button>
                         </div>
 
@@ -1620,12 +1754,17 @@ const App: React.FC = () => {
 
                 {gameState === 'SHOP' && (
                     <div className="relative flex flex-col items-center justify-center w-full h-full animate-in zoom-in duration-500">
-                        {/* デッキビュワーボタン（左下）- バトル中と同じ */}
-                        <div className="absolute bottom-1 left-1 md:bottom-2 md:left-2 z-40">
+                        {/* デッキビュワーボタン・アビリティボタン（左下）- バトル中と同じ */}
+                        <div className="absolute bottom-1 left-1 md:bottom-2 md:left-2 z-40 flex items-center gap-1">
                           <button onClick={() => setIsDeckOverlayOpen(true)} className="flex items-center gap-1.5 px-2 py-1 bg-slate-900/90 backdrop-blur-md border border-indigo-500/40 rounded-lg text-[9px] font-black text-indigo-300 uppercase tracking-widest hover:bg-slate-800 transition-all shadow-xl">
                             <Layers size={12} />
                             <span>DECK</span>
                             <span className="px-1.5 py-0.5 bg-indigo-600 rounded text-white text-[8px]">{permanentDeck.length}</span>
+                          </button>
+                          <button onClick={() => setIsAbilityListOverlayOpen(true)} className="flex items-center gap-1.5 px-2 py-1 bg-slate-900/90 backdrop-blur-md border border-purple-500/40 rounded-lg text-[9px] font-black text-purple-300 uppercase tracking-widest hover:bg-slate-800 transition-all shadow-xl">
+                            <Award size={12} />
+                            <span>ABILITY</span>
+                            <span className="px-1.5 py-0.5 bg-purple-600 rounded text-white text-[8px]">{passives.length}</span>
                           </button>
                         </div>
 
@@ -1720,13 +1859,13 @@ const App: React.FC = () => {
                             </span>
                           </div>
                           {/* ゲージ右端 → ライフへの矢印 */}
-                          <div className={`flex flex-col items-center justify-center h-6 px-1.5 rounded-r border border-l-0 border-red-800 ${
+                          <div className={`flex items-center justify-center h-6 px-1.5 rounded-r border border-l-0 border-red-800 ${
                             (maxHaste - currentHaste) / maxHaste > 0.8
                               ? 'bg-red-600 animate-pulse'
                               : 'bg-red-950'
                           }`}>
-                            <span className="text-[0.625rem] font-black text-red-300">-1</span>
-                            <span className="text-[0.5rem] text-red-400 leading-none">↑</span>
+                            <HeartCrack className="w-4 h-4 text-red-300" />
+                            <span className="text-[0.5rem] font-black text-red-300">-1</span>
                           </div>
                         </div>
                       </div>
@@ -1747,9 +1886,9 @@ const App: React.FC = () => {
                           </span>
                         </div>
                         {/* 空のスペーサー（HASTEと揃えるため） */}
-                        <div className="flex items-center justify-center h-6 px-2 opacity-0">
-                          <Heart className="w-4 h-4" />
-                          <span className="text-[0.5rem] font-black ml-0.5">-1</span>
+                        <div className="flex items-center justify-center h-6 px-1.5 opacity-0">
+                          <HeartCrack className="w-4 h-4" />
+                          <span className="text-[0.5rem] font-black">-1</span>
                         </div>
                       </div>
 
@@ -1812,10 +1951,10 @@ const App: React.FC = () => {
                       </div>
                     </div>
 
-                    <div className="flex flex-col gap-2 md:gap-4 flex-1">
+                    <div className="flex flex-col gap-2 md:gap-4 flex-1 min-h-0">
                         {hand.length > 0 ? (
-                            <div className="flex justify-center gap-1.5 md:gap-3 animate-in slide-in-from-bottom-4 overflow-x-auto pb-1.5 no-scrollbar">
-                                {hand.map((item, idx) => <div key={`hand-${item.id}-${idx}`} className="flex-1 max-w-[30%]"><Card skill={item} onClick={() => selectSkill(item)} disabled={isTargetMet || isMonsterAttacking || turnResetMessage} mana={mana} currentHaste={currentHaste} heroStats={heroStats} physicalMultiplier={battleEvent.physicalMultiplier} magicMultiplier={battleEvent.magicMultiplier} effectsDisabled={isEffectDisabled(item)} lastCardWasPhysical={wasLastCardPhysical()} deckSlashCount={deckSlashCount} enemyDamageTaken={enemyDamageTaken} /></div>)}
+                            <div className="flex gap-1.5 md:gap-3 animate-in slide-in-from-bottom-4 overflow-x-auto pb-2 px-2 scrollbar-thin scrollbar-thumb-slate-600 scrollbar-track-slate-800">
+                                {hand.map((item, idx) => <div key={`hand-${item.id}-${idx}`} className="flex-shrink-0"><Card skill={item} onClick={() => selectSkill(item)} disabled={isTargetMet || isMonsterAttacking || turnResetMessage} mana={mana} currentHaste={currentHaste} heroStats={heroStats} physicalMultiplier={battleEvent.physicalMultiplier} magicMultiplier={battleEvent.magicMultiplier} effectsDisabled={isEffectDisabled(item)} lastCardWasPhysical={wasLastCardPhysical()} deckSlashCount={deckSlashCount} enemyDamageTaken={enemyDamageTaken} /></div>)}
                             </div>
                         ) : (
                             <div className="flex-1 flex items-center justify-center text-center p-4">
@@ -1857,10 +1996,10 @@ const App: React.FC = () => {
                             : 'bg-slate-900 border-slate-700 opacity-40 cursor-not-allowed'
                         }`}
                       >
-                        <Skull className="text-red-400" size={16} />
+                        <HeartCrack className="text-red-400" size={16} />
                         <span className="text-[9px] font-bold text-white uppercase tracking-wider">ターン終了</span>
                         <div className="flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-red-500 text-white">
-                          <Heart className="w-3 h-3" />
+                          <HeartCrack className="w-3 h-3" />
                           <span className="text-[8px] font-black">-1</span>
                         </div>
                       </button>
@@ -1887,6 +2026,25 @@ const App: React.FC = () => {
                 </div>
             )}
             {gameState === 'CARD_REWARD' && (
+                <div className="flex flex-col flex-1 gap-2">
+                    {/* ステータスパネル（バトル中と同じ） */}
+                    <PlayerStatusPanel
+                        life={life}
+                        maxLife={maxLife}
+                        currentHaste={maxHaste}
+                        maxHaste={maxHaste}
+                        mana={mana}
+                        maxMana={maxMana}
+                        gold={gold}
+                        heroStats={heroStats}
+                        showHasteGauge={true}
+                        showManaGauge={true}
+                        showGold={true}
+                        showDeckButton={false}
+                    />
+                </div>
+            )}
+            {gameState === 'ABILITY_REWARD' && (
                 <div className="flex flex-col flex-1 gap-2">
                     {/* ステータスパネル（バトル中と同じ） */}
                     <PlayerStatusPanel

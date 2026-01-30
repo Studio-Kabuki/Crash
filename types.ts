@@ -109,7 +109,7 @@ export interface Enemy {
   dropsAbility: 'N' | 'C' | 'Y';  // N: カード, C: コモンアビリティ, Y: 全アビリティ（エリート）
 }
 
-export type GameState = 'START' | 'PLAYING' | 'LEVEL_CLEAR' | 'BOSS_VICTORY' | 'GAME_OVER' | 'CARD_REWARD' | 'SHOP';
+export type GameState = 'START' | 'PLAYING' | 'LEVEL_CLEAR' | 'BOSS_VICTORY' | 'ABILITY_REWARD' | 'GAME_OVER' | 'CARD_REWARD' | 'SHOP';
 
 export interface PassiveEffect {
   id: string;

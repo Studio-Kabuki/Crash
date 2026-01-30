@@ -225,7 +225,8 @@ const generateId = () => Math.random().toString(36).substr(2, 9);
 function convertToSkill(raw: RawSkill): Omit<Skill, 'id'> {
   let effect: SkillEffect | undefined;
 
-  if (raw.effectType && raw.effectType.length > 0) {
+  // effectType があるか、effectDescription があれば effect オブジェクトを作成
+  if ((raw.effectType && raw.effectType.length > 0) || (raw.effectDescription && raw.effectDescription.length > 0)) {
     // effectParamsをJSONパース（空文字列やundefinedの場合は空オブジェクト）
     let params: EffectParams = {};
     if (raw.effectParams && raw.effectParams.length > 0) {
@@ -237,7 +238,7 @@ function convertToSkill(raw: RawSkill): Omit<Skill, 'id'> {
     }
 
     effect = {
-      type: raw.effectType as EffectType,
+      type: (raw.effectType || 'none') as EffectType,
       trigger: (raw.effectTrigger || 'on_use') as EffectTrigger,
       description: raw.effectDescription || '',
       params
@@ -340,8 +341,9 @@ export async function loadGameData(): Promise<GameData> {
   const initialSkillNames = ['スラッシュ', 'ハイスラッシュ', 'ためる'];
   const initialSkills = allSkills.filter(s => initialSkillNames.includes(s.name));
 
-  // スキルプール: 初期スキル以外
-  const skillPool = allSkills.filter(s => !initialSkillNames.includes(s.name));
+  // スキルプール: スラッシュ以外（ハイスラッシュ・ためるはドロップ/ショップ対象）
+  const excludeFromPool = ['スラッシュ'];
+  const skillPool = allSkills.filter(s => !excludeFromPool.includes(s.name));
 
   return {
     initialSkills,

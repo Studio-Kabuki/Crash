@@ -1,5 +1,5 @@
 import React from 'react';
-import { Heart, Zap, Hexagon, Swords, Sparkles, Coins, Layers } from 'lucide-react';
+import { Heart, HeartCrack, Zap, Hexagon, Swords, Sparkles, Coins, Layers } from 'lucide-react';
 import { Tooltip } from './Tooltip';
 
 interface HeroStats {
@@ -114,13 +114,13 @@ const PlayerStatusPanel: React.FC<PlayerStatusPanelProps> = ({
               {maxHaste - currentHaste} / {maxHaste}
             </span>
           </div>
-          <div className={`flex flex-col items-center justify-center h-6 px-1.5 rounded-r border border-l-0 border-red-800 ${
+          <div className={`flex items-center justify-center h-6 px-1.5 rounded-r border border-l-0 border-red-800 ${
             (maxHaste - currentHaste) / maxHaste > 0.8
               ? 'bg-red-600 animate-pulse'
               : 'bg-red-950'
           }`}>
-            <span className="text-[0.625rem] font-black text-red-300">-1</span>
-            <span className="text-[0.5rem] text-red-400 leading-none">↑</span>
+            <HeartCrack className="w-4 h-4 text-red-300" />
+            <span className="text-[0.5rem] font-black text-red-300">-1</span>
           </div>
         </div>
       )}
@@ -142,9 +142,9 @@ const PlayerStatusPanel: React.FC<PlayerStatusPanelProps> = ({
             </span>
           </div>
           {showHasteGauge && (
-            <div className="flex items-center justify-center h-6 px-2 opacity-0">
-              <Heart className="w-4 h-4" />
-              <span className="text-[0.5rem] font-black ml-0.5">-1</span>
+            <div className="flex items-center justify-center h-6 px-1.5 opacity-0">
+              <HeartCrack className="w-4 h-4" />
+              <span className="text-[0.5rem] font-black">-1</span>
             </div>
           )}
         </div>

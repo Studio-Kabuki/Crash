@@ -1,7 +1,7 @@
 name,icon,cardType,baseDamage,adRatio,apRatio,manaCost,delay,color,borderColor,heightClass,widthClass,borderRadiusClass,rarity,effectType,effectTrigger,effectParams,effectDescription
 string,string,string,number,number,number,number,number,string,string,string,string,string,string,string,string,string,string
 スラッシュ,https://img.icons8.com/fluency/144/sword.png,attack,20,100,0,0,10,bg-slate-700,border-slate-400,h-8,w-56,rounded-sm transform -skew-x-12,C,,,,
-ハイスラッシュ,https://img.icons8.com/fluency/144/long-sword.png,attack,35,150,0,10,10,bg-slate-600,border-indigo-400,h-10,w-56,rounded-sm transform -skew-x-12,R,,,,
+ハイスラッシュ,https://img.icons8.com/fluency/144/long-sword.png,attack,30,200,0,10,10,bg-slate-600,border-indigo-400,h-10,w-56,rounded-sm transform -skew-x-12,R,,,,
 マジックミサイル,https://img.icons8.com/fluency/144/magic-wand.png,attack,10,0,200,30,0,bg-indigo-600,border-indigo-300,h-9,w-48,rounded-full,R,,,,
 クラッシュ,https://img.icons8.com/fluency/144/fire-element.png,attack,110,0,100,50,10,bg-orange-600,border-orange-400,h-10,w-52,rounded-full,R,,,,
 過集中,https://img.icons8.com/fluency/144/cleric.png,support,0,0,0,0,0,bg-teal-600,border-teal-400,h-8,w-48,rounded-full,R,mana_recovery,on_use,{"value":30},マナを30回復する
