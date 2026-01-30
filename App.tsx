@@ -1953,7 +1953,7 @@ const App: React.FC = () => {
 
                     <div className="flex flex-col gap-2 md:gap-4 flex-1 min-h-0">
                         {hand.length > 0 ? (
-                            <div className="flex gap-1.5 md:gap-3 animate-in slide-in-from-bottom-4 overflow-x-auto pb-2 px-2 scrollbar-thin scrollbar-thumb-slate-600 scrollbar-track-slate-800">
+                            <div className="flex justify-center gap-1.5 md:gap-3 animate-in slide-in-from-bottom-4 overflow-x-auto pb-2 px-2 scrollbar-thin scrollbar-thumb-slate-600 scrollbar-track-slate-800">
                                 {hand.map((item, idx) => <div key={`hand-${item.id}-${idx}`} className="flex-shrink-0"><Card skill={item} onClick={() => selectSkill(item)} disabled={isTargetMet || isMonsterAttacking || turnResetMessage} mana={mana} currentHaste={currentHaste} heroStats={heroStats} physicalMultiplier={battleEvent.physicalMultiplier} magicMultiplier={battleEvent.magicMultiplier} effectsDisabled={isEffectDisabled(item)} lastCardWasPhysical={wasLastCardPhysical()} deckSlashCount={deckSlashCount} enemyDamageTaken={enemyDamageTaken} /></div>)}
                             </div>
                         ) : (
