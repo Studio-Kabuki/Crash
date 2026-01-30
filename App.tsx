@@ -1887,10 +1887,12 @@ const App: React.FC = () => {
 
                         {/* ゲージ行 */}
                         <div className="flex items-center gap-2">
-                          <div className="flex items-center gap-1 w-14">
-                            <Zap className="w-4 h-4 text-slate-300" />
-                            <span className="text-[0.5rem] font-black text-slate-300">HASTE</span>
-                          </div>
+                          <Tooltip content={"ヘイストが最大になるとライフが減る。\nライフが減ると最大枚数までカードを引く。"}>
+                            <div className="flex items-center gap-1 w-14 cursor-pointer select-none hover:bg-slate-800/50 rounded px-1 -mx-1 transition-colors">
+                              <Zap className="w-4 h-4 text-slate-300 pointer-events-none" />
+                              <span className="text-[0.5rem] font-black text-slate-300 pointer-events-none">HASTE</span>
+                            </div>
+                          </Tooltip>
                           <div className="flex-1 h-6 bg-slate-950 rounded-l border border-slate-700 relative overflow-hidden">
                             {/* 10区切りグリッド */}
                             <div className="absolute inset-0 flex z-10">
@@ -1926,10 +1928,12 @@ const App: React.FC = () => {
 
                       {/* MANAゲージ */}
                       <div className="flex items-center gap-2">
-                        <div className="flex items-center gap-1 w-14">
-                          <Hexagon className="w-4 h-4 text-blue-400" />
-                          <span className="text-[0.5rem] font-black text-blue-400">MANA</span>
-                        </div>
+                        <Tooltip content={"一部のカードの使用時に消費する。\n戦闘終了時に回復する。\n上限を超えて回復は出来ない。"}>
+                          <div className="flex items-center gap-1 w-14 cursor-pointer select-none hover:bg-slate-800/50 rounded px-1 -mx-1 transition-colors">
+                            <Hexagon className="w-4 h-4 text-blue-400 pointer-events-none" />
+                            <span className="text-[0.5rem] font-black text-blue-400 pointer-events-none">MANA</span>
+                          </div>
+                        </Tooltip>
                         <div className="flex-1 h-6 bg-slate-950 rounded border border-slate-700 relative overflow-hidden">
                           <div
                             className="h-full bg-gradient-to-r from-blue-600 to-blue-400 transition-all duration-300"
