@@ -55,7 +55,7 @@ export interface Enemy {
   trait?: BattleEvent; // 敵固有の場の効果
 }
 
-export type GameState = 'START' | 'PLAYING' | 'LEVEL_CLEAR' | 'BOSS_VICTORY' | 'GAME_OVER' | 'CARD_REWARD' | 'SHOP';
+export type GameState = 'START' | 'PLAYING' | 'LEVEL_CLEAR' | 'BOSS_VICTORY' | 'GAME_OVER' | 'CARD_REWARD' | 'SHOP' | 'BESTIARY';
 
 export interface PassiveEffect {
   id: string;

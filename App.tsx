@@ -4,12 +4,12 @@ import { GameState, Skill, PassiveEffect, BattleEvent, Enemy, Rarity, HeroStats 
 import { PASSIVE_POOL, INITIAL_MANA, INITIAL_LIFE, INITIAL_HERO_STATS } from './constants';
 import { loadGameData, GameData, DEFAULT_EVENT, createSkillWithId } from './utils/dataLoader';
 import { Card } from './components/Card';
-import { 
-  RotateCcw, Swords, Skull, Zap, ArrowRight, ScrollText, 
-  ShieldAlert, Sparkles, Ghost, Hexagon, 
+import {
+  RotateCcw, Swords, Skull, Zap, ArrowRight, ScrollText,
+  ShieldAlert, Sparkles, Ghost, Hexagon,
   CheckCircle2, Info, Award, Undo2, Layers, PlusCircle,
   X, Search, Biohazard, Heart, Coffee, Coins, ShoppingCart, Check,
-  ZapOff, Star
+  ZapOff, Star, BookOpen
 } from 'lucide-react';
 
 // フォールバック付き画像コンポーネント
@@ -869,6 +869,7 @@ const App: React.FC = () => {
                 <div className="flex flex-col items-center justify-center flex-1 gap-5 py-4">
                     <h2 className="text-xl md:text-2xl font-fantasy font-bold text-slate-100 tracking-widest uppercase">Combo Chronicle</h2>
                     <button onClick={startGame} className="flex items-center gap-2 bg-red-600 hover:bg-red-500 text-white font-bold py-2.5 px-10 rounded-full shadow-[0_0_20px_rgba(220,38,38,0.4)] transition-all uppercase tracking-widest"><Swords size={18} /> 戦闘開始</button>
+                    <button onClick={() => setGameState('BESTIARY')} className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-2.5 px-10 rounded-full shadow-[0_0_20px_rgba(99,102,241,0.4)] transition-all uppercase tracking-widest"><BookOpen size={18} /> モンスター図鑑</button>
                 </div>
             )}
             {gameState === 'PLAYING' && (
@@ -951,6 +952,64 @@ const App: React.FC = () => {
                     <button onClick={startGame} className="w-full bg-red-900/20 hover:bg-red-900/40 text-red-400 font-bold py-2 px-8 rounded-lg border border-red-900/50 transition-all text-[10px] uppercase tracking-[0.1em]">Retry Journey</button>
                 </div>
             )}
+            {gameState === 'BESTIARY' && (() => {
+                const normalEnemies = gameData.enemies.filter(e => e.minFloor !== e.maxFloor);
+                const eliteEnemies = gameData.enemies.filter(e => e.minFloor === e.maxFloor);
+                const renderEnemyCard = (enemy: Enemy, idx: number, isElite: boolean) => (
+                    <div key={idx} className={`bg-slate-900/80 border rounded-xl p-3 flex flex-col items-center hover:border-indigo-500/50 transition-all ${isElite ? 'border-yellow-600/50' : 'border-slate-800'}`}>
+                        <SafeImage src={enemy.icon} alt={enemy.name} className="w-12 h-12 md:w-16 md:h-16 object-contain mb-2" />
+                        <span className="text-[10px] font-black text-slate-100 uppercase tracking-wider text-center leading-tight">{enemy.name}</span>
+                        <div className="mt-2 flex flex-col items-center gap-1 w-full">
+                            <div className="flex items-center gap-1">
+                                <Heart size={10} className="text-red-500" />
+                                <span className="text-[9px] font-bold text-red-400">HP: {enemy.baseHP}</span>
+                            </div>
+                            <div className="text-[8px] font-bold text-slate-500">
+                                {isElite ? `F${enemy.minFloor}` : `F${enemy.minFloor} - F${enemy.maxFloor === 999 ? '∞' : enemy.maxFloor}`}
+                            </div>
+                            {enemy.trait && (
+                                <div className={`mt-1 px-2 py-1 rounded text-[7px] font-bold text-center w-full ${enemy.trait.type === 'positive' ? 'bg-green-900/50 text-green-400 border border-green-700/50' : enemy.trait.type === 'negative' ? 'bg-red-900/50 text-red-400 border border-red-700/50' : 'bg-slate-800 text-slate-400 border border-slate-700'}`}>
+                                    <div className="font-black uppercase tracking-wider">{enemy.trait.title}</div>
+                                    <div className="mt-0.5 opacity-80">{enemy.trait.description}</div>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                );
+                return (
+                    <div className="flex flex-col items-center flex-1 py-4 animate-in fade-in duration-300">
+                        <div className="flex items-center gap-2 mb-4">
+                            <BookOpen className="text-indigo-400" size={24} />
+                            <h2 className="text-xl font-fantasy font-bold text-slate-100 tracking-widest uppercase">モンスター図鑑</h2>
+                        </div>
+                        <div className="flex-1 overflow-y-auto no-scrollbar w-full px-2">
+                            <div className="mb-4">
+                                <div className="flex items-center gap-2 mb-3 pb-2 border-b border-slate-800">
+                                    <Skull size={16} className="text-slate-400" />
+                                    <h3 className="text-sm font-bold text-slate-400 uppercase tracking-widest">ザコ敵</h3>
+                                    <span className="text-[10px] text-slate-600 font-bold">{normalEnemies.length}体</span>
+                                </div>
+                                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+                                    {normalEnemies.map((enemy, idx) => renderEnemyCard(enemy, idx, false))}
+                                </div>
+                            </div>
+                            <div className="mt-6">
+                                <div className="flex items-center gap-2 mb-3 pb-2 border-b border-yellow-700/50">
+                                    <Star size={16} className="text-yellow-500" />
+                                    <h3 className="text-sm font-bold text-yellow-500 uppercase tracking-widest">エリート</h3>
+                                    <span className="text-[10px] text-yellow-600 font-bold">{eliteEnemies.length}体</span>
+                                </div>
+                                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+                                    {eliteEnemies.map((enemy, idx) => renderEnemyCard(enemy, idx, true))}
+                                </div>
+                            </div>
+                        </div>
+                        <button onClick={() => setGameState('START')} className="mt-4 flex items-center gap-2 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold py-2 px-8 rounded-full transition-all uppercase tracking-widest text-sm">
+                            <Undo2 size={16} /> 戻る
+                        </button>
+                    </div>
+                );
+            })()}
             </div>
         </main>
       </div>
