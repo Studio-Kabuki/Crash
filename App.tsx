@@ -4,6 +4,7 @@ import { GameState, Skill, PassiveEffect, BattleEvent, Enemy, Rarity, HeroStats,
 import { PASSIVE_POOL, INITIAL_MANA, INITIAL_LIFE, INITIAL_HERO_STATS } from './constants';
 import { loadGameData, GameData, DEFAULT_EVENT, createSkillWithId, BUFFS, BuffDefinition } from './utils/dataLoader';
 import { Card } from './components/Card';
+import { Tooltip } from './components/Tooltip';
 import {
   RotateCcw, Swords, Skull, Zap, ArrowRight, ScrollText,
   ShieldAlert, Sparkles, Ghost, Hexagon,
@@ -811,55 +812,67 @@ const App: React.FC = () => {
                         </div>
 
                         {/* 一段目：ライフ回復 */}
-                        <div className="flex justify-center w-full px-4 mb-2">
-                            <div className={`bg-slate-900/60 border-2 rounded-xl p-2 flex items-center gap-3 group transition-all ${hasBoughtLife ? 'border-slate-800 opacity-50' : 'border-red-500/50 hover:border-red-400'}`}>
-                                <Heart className={`text-red-500 ${hasBoughtLife ? 'grayscale' : 'animate-pulse'}`} size={24} />
-                                <div className="flex flex-col">
-                                    <span className="text-[9px] font-black text-white uppercase">Life +1</span>
-                                    <span className="text-[7px] text-slate-400">ライフを1回復</span>
+                        <div className="flex items-center gap-2 px-4 pb-2 border-b border-slate-700">
+                            <div className={`flex-1 p-2 rounded border-2 flex items-center gap-2 ${
+                                hasBoughtLife
+                                    ? 'opacity-50 border-slate-700'
+                                    : 'border-red-500/50 bg-red-950/30'
+                            }`}>
+                                <Heart className={`w-6 h-6 text-red-500 shrink-0 ${hasBoughtLife ? 'grayscale' : 'animate-pulse'}`} />
+                                <div className="flex-1 min-w-0">
+                                    <h3 className="font-bold text-slate-100 text-[8px] leading-tight uppercase tracking-wide">Life +1</h3>
+                                    <p className="text-[7px] text-slate-400 leading-snug">ライフを1回復</p>
                                 </div>
-                                {hasBoughtLife ? (
-                                    <span className="text-[8px] text-green-500 font-bold px-2">SOLD OUT</span>
-                                ) : (
-                                    <button
-                                        onClick={handleBuyLife}
-                                        disabled={gold < LIFE_RECOVERY_PRICE || life >= maxLife}
-                                        className={`flex items-center gap-1 px-3 py-1 rounded-full text-[8px] font-black transition-all ${gold >= LIFE_RECOVERY_PRICE && life < maxLife ? 'bg-yellow-600 hover:bg-yellow-500 text-white shadow-lg' : 'bg-slate-800 text-slate-500 cursor-not-allowed'}`}
-                                    >
-                                        <Coins size={10} /> {LIFE_RECOVERY_PRICE}G
-                                    </button>
-                                )}
                             </div>
-                        </div>
-
-                        {/* 二段目：アビリティ（横長ボタン形式） */}
-                        {shopPassive && (
-                            <div className="w-full px-4 mb-3">
+                            {hasBoughtLife ? (
+                                <span className="text-[8px] text-green-500 font-bold px-2 shrink-0">SOLD</span>
+                            ) : (
                                 <button
-                                    onClick={handleBuyPassive}
-                                    disabled={hasBoughtPassive || gold < getPassivePrice(shopPassive.rarity)}
-                                    className={`w-full p-2 rounded border-2 transition-all text-left flex items-center gap-2 group ${
-                                        hasBoughtPassive
-                                            ? 'opacity-50 cursor-not-allowed border-slate-700'
-                                            : `hover:brightness-125 ${getRarityColor(shopPassive.rarity)}`
+                                    onClick={handleBuyLife}
+                                    disabled={gold < LIFE_RECOVERY_PRICE || life >= maxLife}
+                                    className={`flex items-center gap-1 px-3 py-2 rounded-lg text-[8px] font-black shrink-0 transition-all ${
+                                        gold >= LIFE_RECOVERY_PRICE && life < maxLife
+                                            ? 'bg-yellow-600 hover:bg-yellow-500 text-white'
+                                            : 'bg-slate-800 text-slate-500 cursor-not-allowed'
                                     }`}
                                 >
-                                    <SafeImage src={shopPassive.icon} alt={shopPassive.name} className={`w-8 h-8 object-contain shrink-0 ${hasBoughtPassive ? 'grayscale' : ''}`} />
-                                    <div className="flex-1">
-                                        <div className="flex justify-between items-center">
-                                            <h3 className="font-bold text-slate-100 text-[9px] leading-tight uppercase tracking-widest">{shopPassive.name}</h3>
-                                            <span className={`text-[7px] font-black px-1 rounded ${shopPassive.rarity === 'SSR' ? 'text-yellow-500' : shopPassive.rarity === 'R' ? 'text-slate-300' : 'text-orange-500'}`}>{shopPassive.rarity}</span>
-                                        </div>
-                                        <p className="text-[7px] text-slate-400 leading-snug mt-0.5">{shopPassive.description}</p>
-                                    </div>
-                                    {hasBoughtPassive ? (
-                                        <span className="text-[8px] text-green-500 font-bold px-2">SOLD</span>
-                                    ) : (
-                                        <div className="flex items-center gap-1 px-2 py-1 rounded-full bg-indigo-600 text-white text-[8px] font-black">
-                                            <Coins size={10} /> {getPassivePrice(shopPassive.rarity)}G
-                                        </div>
-                                    )}
+                                    <Coins size={12} /> {LIFE_RECOVERY_PRICE}G
                                 </button>
+                            )}
+                        </div>
+
+                        {/* 二段目：アビリティ */}
+                        {shopPassive && (
+                            <div className="flex items-center gap-2 px-4 py-2 border-b border-slate-700">
+                                <div className={`flex-1 p-2 rounded border-2 flex items-center gap-2 ${
+                                    hasBoughtPassive
+                                        ? 'opacity-50 border-slate-700'
+                                        : getRarityColor(shopPassive.rarity)
+                                }`}>
+                                    <SafeImage src={shopPassive.icon} alt={shopPassive.name} className={`w-6 h-6 object-contain shrink-0 ${hasBoughtPassive ? 'grayscale' : ''}`} />
+                                    <div className="flex-1 min-w-0">
+                                        <div className="flex items-center gap-1">
+                                            <h3 className="font-bold text-slate-100 text-[8px] leading-tight uppercase tracking-wide truncate">{shopPassive.name}</h3>
+                                            <span className={`text-[7px] font-black shrink-0 ${shopPassive.rarity === 'SSR' ? 'text-yellow-500' : shopPassive.rarity === 'R' ? 'text-slate-300' : 'text-orange-500'}`}>{shopPassive.rarity}</span>
+                                        </div>
+                                        <p className="text-[7px] text-slate-400 leading-snug truncate">{shopPassive.description}</p>
+                                    </div>
+                                </div>
+                                {hasBoughtPassive ? (
+                                    <span className="text-[8px] text-green-500 font-bold px-2 shrink-0">SOLD</span>
+                                ) : (
+                                    <button
+                                        onClick={handleBuyPassive}
+                                        disabled={gold < getPassivePrice(shopPassive.rarity)}
+                                        className={`flex items-center gap-1 px-3 py-2 rounded-lg text-[8px] font-black shrink-0 transition-all ${
+                                            gold >= getPassivePrice(shopPassive.rarity)
+                                                ? 'bg-indigo-600 hover:bg-indigo-500 text-white'
+                                                : 'bg-slate-800 text-slate-500 cursor-not-allowed'
+                                        }`}
+                                    >
+                                        <Coins size={12} /> {getPassivePrice(shopPassive.rarity)}G
+                                    </button>
+                                )}
                             </div>
                         )}
 
@@ -922,33 +935,29 @@ const App: React.FC = () => {
                       <div className="relative flex-1 min-w-0">
                         <div className="flex items-center gap-2 overflow-x-auto no-scrollbar py-3 -my-3">
                           {playerBuffs.map(buff => (
-                            <div
-                              key={buff.id}
-                              className={`relative group flex items-center gap-1 px-2 py-0.5 rounded-full border transition-all animate-in fade-in zoom-in duration-300 shrink-0 cursor-pointer ${
-                                buff.type === 'charge'
-                                  ? 'bg-yellow-900/50 border-yellow-600'
-                                  : buff.type === 'stat_up'
-                                  ? 'bg-green-900/50 border-green-600'
-                                  : 'bg-red-900/50 border-red-600'
-                              }`}
-                            >
-                              <SafeImage src={buff.icon} alt={buff.name} className="w-4 h-4 object-contain" />
-                              <span className={`text-[0.5rem] font-black whitespace-nowrap ${
-                                buff.type === 'charge'
-                                  ? 'text-yellow-400'
-                                  : buff.type === 'stat_up'
-                                  ? 'text-green-400'
-                                  : 'text-red-400'
-                              }`}>
-                                {buff.name}
-                                {buff.stat && ` +${buff.value}`}
-                              </span>
-                              {/* ツールチップ（ホバー/タップで表示・下方向・左寄せ） */}
-                              <div className="absolute top-full left-0 mt-2 px-3 py-1.5 bg-slate-900 border border-slate-700 rounded-lg shadow-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible group-active:opacity-100 group-active:visible transition-all duration-200 z-50 pointer-events-none min-w-[120px]">
-                                <div className="absolute bottom-full left-3 border-4 border-transparent border-b-slate-700"></div>
-                                <p className="text-[0.5625rem] text-slate-200 whitespace-nowrap">{buff.description}</p>
+                            <Tooltip key={buff.id} content={buff.description}>
+                              <div
+                                className={`flex items-center gap-1 px-2 py-0.5 rounded-full border transition-all animate-in fade-in zoom-in duration-300 shrink-0 cursor-pointer ${
+                                  buff.type === 'charge'
+                                    ? 'bg-yellow-900/50 border-yellow-600'
+                                    : buff.type === 'stat_up'
+                                    ? 'bg-green-900/50 border-green-600'
+                                    : 'bg-red-900/50 border-red-600'
+                                }`}
+                              >
+                                <SafeImage src={buff.icon} alt={buff.name} className="w-4 h-4 object-contain" />
+                                <span className={`text-[0.5rem] font-black whitespace-nowrap ${
+                                  buff.type === 'charge'
+                                    ? 'text-yellow-400'
+                                    : buff.type === 'stat_up'
+                                    ? 'text-green-400'
+                                    : 'text-red-400'
+                                }`}>
+                                  {buff.name}
+                                  {buff.stat && ` +${buff.value}`}
+                                </span>
                               </div>
-                            </div>
+                            </Tooltip>
                           ))}
                         </div>
                       </div>

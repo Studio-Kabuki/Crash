@@ -8,4 +8,4 @@ string,string,string,number,number,number,number,string,string,string,string,str
 ファイナルスラッシュ,https://img.icons8.com/fluency/144/swords.png,attack,0,0,20,10,bg-purple-700,border-purple-400,h-12,w-56,rounded-none transform skew-x-12,SSR,deck_slash_bonus,on_use,"{""value"":30,""targetName"":""スラッシュ""}",山札の「スラッシュ」枚数×30ダメージ
 かぶりつき,https://img.icons8.com/fluency/144/vampire.png,attack,133,0,0,10,bg-red-800,border-red-400,h-8,w-48,rounded-full,R,lifesteal,on_damage,,与えたダメージ分マナを回復
 祖国のために,https://img.icons8.com/fluency/144/shield.png,attack,167,0,10,10,bg-indigo-700,border-yellow-400,h-10,w-52,rounded-md,SSR,permanent_power_up,on_use,{"value":67},使用するたび永続的に威力+20
-ためる,https://img.icons8.com/fluency/144/lightning-bolt.png,support,0,0,0,10,bg-orange-600,border-orange-400,h-8,w-48,rounded-full,R,add_buff,on_use,{"buffId":"CHARGE"},次のアタックカードを2回発動
+ためる,https://img.icons8.com/fluency/144/lightning-bolt.png,support,0,0,20,0,bg-orange-600,border-orange-400,h-8,w-48,rounded-full,R,add_buff,on_use,{"buffId":"CHARGE"},次のアタックカードを2回発動
