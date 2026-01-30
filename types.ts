@@ -24,6 +24,7 @@ export interface Skill {
   icon: string;
   power: number;
   manaCost: number;
+  delay: number; // ヘイスト消費量（ディレイ）
   color: string;
   borderColor: string;
   heightClass: string;

@@ -11,7 +11,7 @@ export const INITIAL_LIFE = 2;
 export const INITIAL_HERO_STATS: HeroStats = {
   ad: 10,  // 物理攻撃力
   ap: 10,  // 魔法攻撃力
-  sp: 10,  // ヘイスト
+  sp: 30,  // ヘイスト（行動力の最大値）
   mp: 50,  // マナ（INITIAL_MANAと同じ）
 };
 
@@ -110,6 +110,7 @@ export const INITIAL_SKILLS: Omit<Skill, 'id'>[] = [
     icon: 'https://img.icons8.com/fluency/144/sword.png',
     power: 30,
     manaCost: 0,
+    delay: 10,
     color: 'bg-slate-700',
     borderColor: 'border-slate-400',
     heightClass: 'h-8',
@@ -123,6 +124,7 @@ export const INITIAL_SKILLS: Omit<Skill, 'id'>[] = [
     icon: 'https://img.icons8.com/fluency/144/long-sword.png',
     power: 50,
     manaCost: 10,
+    delay: 10,
     color: 'bg-slate-600',
     borderColor: 'border-indigo-400',
     heightClass: 'h-10',
@@ -136,6 +138,7 @@ export const INITIAL_SKILLS: Omit<Skill, 'id'>[] = [
     icon: 'https://img.icons8.com/fluency/144/lightning-bolt.png',
     power: 0,
     manaCost: 0,
+    delay: 10,
     color: 'bg-orange-600',
     borderColor: 'border-orange-400',
     heightClass: 'h-8',
@@ -157,6 +160,7 @@ export const SKILL_POOL: Omit<Skill, 'id'>[] = [
         icon: 'https://img.icons8.com/fluency/144/magic-wand.png',
         power: 30,
         manaCost: 30,
+        delay: 10,
         color: 'bg-indigo-600',
         borderColor: 'border-indigo-300',
         heightClass: 'h-9',
@@ -167,7 +171,7 @@ export const SKILL_POOL: Omit<Skill, 'id'>[] = [
         effect: {
           type: 'combo_skip',
           value: 0,
-          description: "コンボ枠を消費しない",
+          description: "ディレイなし",
         }
     },
     {
@@ -175,6 +179,7 @@ export const SKILL_POOL: Omit<Skill, 'id'>[] = [
         icon: 'https://img.icons8.com/fluency/144/fire-element.png',
         power: 120,
         manaCost: 50,
+        delay: 10,
         color: 'bg-orange-600',
         borderColor: 'border-orange-400',
         heightClass: 'h-10',
@@ -187,7 +192,8 @@ export const SKILL_POOL: Omit<Skill, 'id'>[] = [
         name: '精神統一',
         icon: 'https://img.icons8.com/fluency/144/cleric.png',
         power: 0,
-        manaCost: -30, 
+        manaCost: -30,
+        delay: 10,
         color: 'bg-teal-600',
         borderColor: 'border-teal-400',
         heightClass: 'h-8',
@@ -198,14 +204,15 @@ export const SKILL_POOL: Omit<Skill, 'id'>[] = [
         effect: {
           type: 'combo_skip',
           value: 0,
-          description: "マナ30回復 / コンボ枠を消費しない",
+          description: "マナ30回復 / ディレイなし",
         }
     },
     {
         name: 'ファイナルスラッシュ',
         icon: 'https://img.icons8.com/fluency/144/swords.png',
         power: 0,
-        manaCost: 20, 
+        manaCost: 20,
+        delay: 10,
         color: 'bg-purple-700',
         borderColor: 'border-purple-400',
         heightClass: 'h-12',
@@ -224,6 +231,7 @@ export const SKILL_POOL: Omit<Skill, 'id'>[] = [
         icon: 'https://img.icons8.com/fluency/144/vampire.png',
         power: 40,
         manaCost: 0,
+        delay: 10,
         color: 'bg-red-800',
         borderColor: 'border-red-400',
         heightClass: 'h-8',
@@ -242,6 +250,7 @@ export const SKILL_POOL: Omit<Skill, 'id'>[] = [
         icon: 'https://img.icons8.com/fluency/144/snowflake.png',
         power: 40,
         manaCost: 20,
+        delay: 10,
         color: 'bg-blue-600',
         borderColor: 'border-cyan-300',
         heightClass: 'h-9',
@@ -260,6 +269,7 @@ export const SKILL_POOL: Omit<Skill, 'id'>[] = [
         icon: 'https://img.icons8.com/fluency/144/shield.png',
         power: 50,
         manaCost: 10,
+        delay: 10,
         color: 'bg-indigo-700',
         borderColor: 'border-yellow-400',
         heightClass: 'h-10',
@@ -278,6 +288,7 @@ export const SKILL_POOL: Omit<Skill, 'id'>[] = [
         icon: 'https://img.icons8.com/fluency/144/long-sword.png',
         power: 30,
         manaCost: 0,
+        delay: 10,
         color: 'bg-slate-500',
         borderColor: 'border-orange-500',
         heightClass: 'h-8',
@@ -288,7 +299,7 @@ export const SKILL_POOL: Omit<Skill, 'id'>[] = [
         effect: {
           type: 'adjacency_physical_skip',
           value: 0,
-          description: "30ダメージ / 直前が物理ならコンボ枠を消費しない",
+          description: "30ダメージ / 直前が物理ならディレイなし",
         }
     }
 ];

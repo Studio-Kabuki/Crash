@@ -59,7 +59,9 @@ const App: React.FC = () => {
   // Status Effects & Passive Trackers
   const [isEnemyPoisoned, setIsEnemyPoisoned] = useState<boolean>(false);
   const [physicalAttackCounter, setPhysicalAttackCounter] = useState<number>(0);
-  const [bonusSlotsThisTurn, setBonusSlotsThisTurn] = useState<number>(0);
+
+  // ヘイスト（行動力）システム
+  const [currentHaste, setCurrentHaste] = useState<number>(INITIAL_HERO_STATS.sp);
 
   // Deck Overlay State
   const [isDeckOverlayOpen, setIsDeckOverlayOpen] = useState<boolean>(false);
@@ -75,23 +77,13 @@ const App: React.FC = () => {
   const [enemyHealth, setEnemyHealth] = useState<number>(0);
   const [floatingDamages, setFloatingDamages] = useState<{ id: string; value: number; isMana?: boolean; isPoison?: boolean }[]>([]);
 
-  const capacityBoost = passives.reduce((acc, p) => p.type === 'capacity_boost' ? acc + p.value : acc, 0);
-  const currentMaxCombo = MAX_COMBO + capacityBoost + bonusSlotsThisTurn;
-  
-  // 有効なコンボ消費数（スキップ効果持ち、またはウルスラッシュの特殊条件を満たす場合を除外）
-  const consumedSlotsCount = useMemo(() => {
-    let count = 0;
-    stack.forEach((s, idx) => {
-      let isSkipped = false;
-      if (s.effect?.type === 'combo_skip') isSkipped = true;
-      if (s.effect?.type === 'adjacency_physical_skip') {
-        const prev = idx > 0 ? stack[idx - 1] : null;
-        if (prev && prev.category === 'physical') isSkipped = true;
-      }
-      if (!isSkipped) count++;
-    });
-    return count;
-  }, [stack]);
+  // ヘイスト（行動力）の最大値
+  const maxHaste = useMemo(() => {
+    return heroStats.sp + passives.reduce((acc, p) => p.type === 'capacity_boost' ? acc + p.value : acc, 0);
+  }, [heroStats.sp, passives]);
+
+  // ヘイストが0以下かどうか
+  const isHasteEmpty = currentHaste <= 0;
 
   const maxMana = useMemo(() => {
     return INITIAL_MANA + passives.reduce((acc, p) => p.type === 'score_flat' ? acc + p.value : acc, 0);
@@ -134,8 +126,8 @@ const App: React.FC = () => {
   };
 
   // 手札を引く
-  const drawHand = useCallback((currentDeck: Skill[], currentConsumedSlots: number) => {
-    if (currentConsumedSlots >= currentMaxCombo) {
+  const drawHand = useCallback((currentDeck: Skill[], remainingHaste: number) => {
+    if (remainingHaste <= 0) {
       setHand([]);
       return;
     }
@@ -154,7 +146,7 @@ const App: React.FC = () => {
 
     const newHand = currentDeck.slice(0, 3);
     setHand(newHand);
-  }, [currentMaxCombo, permanentDeck, stack, hand]);
+  }, [permanentDeck, stack, hand]);
 
   const getEnemyForLevel = (lvl: number) => {
       const candidates = FLOOR_ENEMIES.filter(e => lvl >= e.minFloor && lvl <= e.maxFloor);
@@ -184,7 +176,7 @@ const App: React.FC = () => {
     setIsDeckOverlayOpen(false);
     setIsEnemyPoisoned(false);
     setPhysicalAttackCounter(0);
-    setBonusSlotsThisTurn(0);
+    setCurrentHaste(INITIAL_HERO_STATS.sp);
     
     const initialEnemy = getEnemyForLevel(1);
     setCurrentEnemy(initialEnemy);
@@ -208,8 +200,8 @@ const App: React.FC = () => {
         setIsDeckOverlayOpen(false);
         setIsEnemyPoisoned(false);
         setPhysicalAttackCounter(0);
-        setBonusSlotsThisTurn(0);
-        
+        setCurrentHaste(heroStats.sp);
+
         const battleDeck = shuffle(sourceDeck);
         setDeck(battleDeck);
         
@@ -388,12 +380,12 @@ const App: React.FC = () => {
             setGameState('GAME_OVER');
           } else {
             setTurnResetMessage(true);
-            const cardsToRecycle = [...currentStack]; 
+            const cardsToRecycle = [...currentStack];
             const newDeck = shuffle([...currentDeck, ...cardsToRecycle]);
             setDeck(newDeck);
-            setStack([]); 
+            setStack([]);
             setCurrentComboPower(0);
-            setBonusSlotsThisTurn(0);
+            setCurrentHaste(heroStats.sp); // ヘイストをリセット
             setTimeout(() => {
               setTurnResetMessage(false);
               const nextHand = newDeck.slice(0, 3);
@@ -408,59 +400,63 @@ const App: React.FC = () => {
   const isStuckDueToMana = hand.length > 0 && hand.every(s => s.manaCost > mana);
 
   const handleRest = () => {
-    if (consumedSlotsCount >= currentMaxCombo || turnResetMessage || isMonsterAttacking) return;
-    
+    if (currentHaste <= 0 || turnResetMessage || isMonsterAttacking) return;
+
     const mId = generateId();
     // マナ回復を最大値（maxMana）までに制限
     setMana(prev => Math.min(maxMana, prev + 30));
     setFloatingDamages(prev => [...prev, { id: mId, value: 30, isMana: true }]);
     setTimeout(() => setFloatingDamages(p => p.filter(d => d.id !== mId)), 1000);
-    
-    // UIボタンからの精神統一は引き続きコンボ枠を1つ消費
-    const dummySkill: Skill = { id: 'rest', name: '精神統一', icon: '', power: 0, manaCost: 0, category: 'buff', rarity: 'C', color: '', borderColor: '', borderRadiusClass: '', heightClass: '', widthClass: '' };
+
+    // UIボタンからの精神統一はヘイストを10消費
+    const restDelay = 10;
+    const dummySkill: Skill = { id: 'rest', name: '精神統一', icon: '', power: 0, manaCost: 0, delay: restDelay, category: 'buff', rarity: 'C', color: '', borderColor: '', borderRadiusClass: '', heightClass: '', widthClass: '' };
     const newStack = [...stack, dummySkill];
     setStack(newStack);
-    
-    const newConsumedSlots = consumedSlotsCount + 1;
-    if (newConsumedSlots >= currentMaxCombo) {
+
+    const newHaste = Math.round(currentHaste - restDelay);
+    setCurrentHaste(newHaste);
+
+    if (newHaste <= 0) {
         handleEnemyAttack(newStack.filter(s => s.id !== 'rest'), deck);
     }
   };
 
   const selectSkill = (skill: Skill) => {
-    if (consumedSlotsCount >= currentMaxCombo || mana < skill.manaCost || isTargetMet || isMonsterAttacking || turnResetMessage) return;
+    if (currentHaste <= 0 || mana < skill.manaCost || isTargetMet || isMonsterAttacking || turnResetMessage) return;
 
     setProjectile({ icon: skill.icon, id: generateId() });
-    
+
     // 山札からカードを抜く
     let newDeck = deck.filter(d => d.id !== skill.id);
-    
+
     // ファイナルスラッシュ発動時の特殊処理：山札から全ての「スラッシュ」を消す
-    // ここを完全一致から部分一致（includes）に変更
     if (skill.name === 'ファイナルスラッシュ') {
         newDeck = newDeck.filter(d => !d.name.includes('スラッシュ'));
     }
-    
+
     setDeck(newDeck);
 
-    const hasSkipPassive = passives.some(p => p.type === 'combo_skip_physical');
-    let shouldAddBonusSlot = false;
-    if (hasSkipPassive && skill.category === 'physical') {
-      const nextCount = physicalAttackCounter + 1;
-      setPhysicalAttackCounter(nextCount);
-      if (nextCount % 3 === 0) shouldAddBonusSlot = true;
-    }
+    // ディレイスキップ判定（combo_skip効果またはadjacency_physical_skip条件）
+    const isDelaySkip = skill.effect?.type === 'combo_skip' ||
+      (skill.effect?.type === 'adjacency_physical_skip' && stack.length > 0 && stack[stack.length - 1].category === 'physical');
+
+    // ディレイ計算（スキップなら0、それ以外はスキルのディレイ値）
+    const actualDelay = isDelaySkip ? 0 : Math.round(skill.delay);
 
     setTimeout(() => {
         setIsMonsterShaking(true);
         setTimeout(() => setIsMonsterShaking(false), 300);
         setProjectile(null);
-        
+
         // マナ消費/回復（上限をmaxManaに制限）
         setMana(prev => Math.min(maxMana, prev - skill.manaCost));
-        
+
+        // ヘイスト消費
+        const newHaste = Math.round(currentHaste - actualDelay);
+        setCurrentHaste(newHaste);
+
         const newStack = [...stack, skill];
-        if (shouldAddBonusSlot) setBonusSlotsThisTurn(prev => prev + 1);
 
         const newTotalPower = calculateComboPower(newStack);
         let damageDealt = newTotalPower - currentComboPower;
@@ -514,16 +510,13 @@ const App: React.FC = () => {
             return;
         }
 
-        const isSkipCard = skill.effect?.type === 'combo_skip' || (skill.effect?.type === 'adjacency_physical_skip' && stack.length > 0 && stack[stack.length - 1].category === 'physical');
-        const updatedMaxComboNow = currentMaxCombo + (shouldAddBonusSlot ? 1 : 0);
-        const nextConsumedCount = consumedSlotsCount + (isSkipCard ? 0 : 1);
-
-        if (nextConsumedCount >= updatedMaxComboNow) {
+        // ヘイストが0以下になったら敵の攻撃
+        if (newHaste <= 0) {
              handleEnemyAttack(newStack, newDeck);
         } else {
-            drawHand(newDeck, nextConsumedCount);
+            drawHand(newDeck, newHaste);
         }
-    }, 450); 
+    }, 450);
   };
 
   const getRarityColor = (rarity: Rarity) => {
@@ -690,8 +683,8 @@ const App: React.FC = () => {
                             <span className="text-[0.375rem] font-black uppercase tracking-widest text-indigo-400 leading-none mb-1">TOTAL DMG</span>
                             <span className={`text-[1.25rem] font-black font-fantasy leading-none ${isTargetMet ? 'text-green-400' : 'text-white'}`}>{currentComboPower}</span>
                             <div className="w-full h-px bg-slate-800 my-1"></div>
-                            <span className="text-[0.375rem] font-black uppercase tracking-widest text-slate-500 leading-none mb-1">COMBO</span>
-                            <div className={`text-[0.625rem] font-black leading-none ${isTargetMet ? 'text-green-400' : 'text-slate-400'}`}>{isTargetMet ? "KILLED" : `${consumedSlotsCount}/${currentMaxCombo}`}</div>
+                            <span className="text-[0.375rem] font-black uppercase tracking-widest text-yellow-500 leading-none mb-1">HASTE</span>
+                            <div className={`text-[0.625rem] font-black leading-none ${isTargetMet ? 'text-green-400' : 'text-yellow-400'}`}>{isTargetMet ? "KILLED" : `${currentHaste}/${maxHaste}`}</div>
                           </div>
                         </div>
 
@@ -864,7 +857,7 @@ const App: React.FC = () => {
                            </div>
                         ) : hand.length > 0 ? (
                             <div className="flex justify-center gap-1.5 md:gap-3 animate-in slide-in-from-bottom-4 overflow-x-auto pb-1.5 no-scrollbar">
-                                {hand.map((item) => <div key={item.id} className="flex-1 max-w-[30%]"><Card skill={item} onClick={() => selectSkill(item)} disabled={consumedSlotsCount >= currentMaxCombo || isTargetMet || isMonsterAttacking || turnResetMessage} mana={mana} marketModifier={getSkillMarketModifier(item)} effectsDisabled={isEffectDisabled(item)} /></div>)}
+                                {hand.map((item) => <div key={item.id} className="flex-1 max-w-[30%]"><Card skill={item} onClick={() => selectSkill(item)} disabled={currentHaste <= 0 || isTargetMet || isMonsterAttacking || turnResetMessage} mana={mana} marketModifier={getSkillMarketModifier(item)} effectsDisabled={isEffectDisabled(item)} /></div>)}
                             </div>
                         ) : (
                             <div className="flex-1 flex items-center justify-center text-center p-4">
@@ -943,7 +936,7 @@ const App: React.FC = () => {
                             <div className="flex flex-col">
                                 <div className="flex items-center gap-2">
                                     <span className="font-bold text-slate-300 uppercase tracking-widest">{item.name}</span>
-                                    {isSkipped && <span className="text-[7px] bg-indigo-600 text-white px-1 rounded font-black">SLOT SKIP</span>}
+                                    {isSkipped && <span className="text-[0.4375rem] bg-yellow-600 text-white px-1 rounded font-black">DELAY 0</span>}
                                 </div>
                                 {item.effect && <p className="text-[9px] leading-tight mt-1 text-indigo-400 font-bold">{item.effect.description}</p>}
                             </div>

@@ -69,10 +69,11 @@ export const Card: React.FC<CardProps> = ({
 
       {/* Power Indicator (Top Right) */}
       <div className={`
-        absolute top-0 right-0 text-[0.625rem] font-bold px-2 py-0.5 rounded-bl border-l border-b z-10 flex items-center gap-0.5
+        absolute top-0 right-0 text-[0.5rem] font-bold px-2 py-0.5 rounded-bl border-l border-b z-10 flex items-center gap-1.5
         ${isUp ? 'bg-indigo-900 text-indigo-200 border-indigo-700' : 'bg-slate-800 text-slate-300 border-slate-700'}
       `}>
-        ATK:{adjustedPower}
+        <span>ATK:{adjustedPower}</span>
+        <span className="text-yellow-400">D:{skill.delay}</span>
         {isUp && <Zap size={8} />}
       </div>
 
