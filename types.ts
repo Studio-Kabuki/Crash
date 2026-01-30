@@ -109,9 +109,10 @@ export interface PassiveEffect {
   name: string;
   icon: string;
   description: string;
-  type: 'score_flat' | 'capacity_boost' | 'score_mult' | 'adjacency_to_mult' | 'sauce_mult_add' | 'max_life_boost' | 'flat_damage_bonus';
+  type: 'score_flat' | 'capacity_boost' | 'score_mult' | 'adjacency_to_mult' | 'sauce_mult_add' | 'max_life_boost' | 'flat_damage_bonus' | 'category_buff';
   value: number;
   rarity: Rarity;
+  targetCategory?: string;  // category_buff用
 }
 
 export interface CardProps {
@@ -119,6 +120,7 @@ export interface CardProps {
   onClick: () => void;
   disabled: boolean;
   mana: number;
+  currentHaste: number;
   heroStats: HeroStats;
   physicalMultiplier?: number;
   magicMultiplier?: number;

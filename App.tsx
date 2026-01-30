@@ -1,8 +1,7 @@
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { GameState, Skill, PassiveEffect, BattleEvent, Enemy, Rarity, HeroStats, PlayerBuff } from './types';
-import { PASSIVE_POOL, INITIAL_MANA, INITIAL_LIFE, INITIAL_HERO_STATS } from './constants';
-import { loadGameData, GameData, DEFAULT_EVENT, createSkillWithId, BUFFS, BuffDefinition } from './utils/dataLoader';
+import { loadGameData, GameData, DEFAULT_EVENT, createSkillWithId, BUFFS, BuffDefinition, HeroInitialData } from './utils/dataLoader';
 import { Card } from './components/Card';
 import { Tooltip } from './components/Tooltip';
 import {
@@ -45,15 +44,20 @@ const App: React.FC = () => {
   const [currentComboPower, setCurrentComboPower] = useState<number>(0);
   const [battleEvent, setBattleEvent] = useState<BattleEvent>(DEFAULT_EVENT);
   
-  const [mana, setMana] = useState<number>(INITIAL_MANA); 
-  const [life, setLife] = useState<number>(INITIAL_LIFE);
+  // デフォルト初期値（CSVロード前のフォールバック）
+  const defaultHeroStats: HeroStats = { ad: 30, ap: 10, sp: 30, mp: 50 };
+  const defaultMana = 50;
+  const defaultLife = 2;
+
+  const [mana, setMana] = useState<number>(defaultMana);
+  const [life, setLife] = useState<number>(defaultLife);
   const [gold, setGold] = useState<number>(0);
 
   const [passives, setPassives] = useState<PassiveEffect[]>([]);
   const [shopOptions, setShopOptions] = useState<PassiveEffect[]>([]);
 
   // 主人公パラメータ
-  const [heroStats, setHeroStats] = useState<HeroStats>(INITIAL_HERO_STATS);
+  const [heroStats, setHeroStats] = useState<HeroStats>(defaultHeroStats);
 
   // Shop specific states
   const [shopCards, setShopCards] = useState<Skill[]>([]);
@@ -69,7 +73,7 @@ const App: React.FC = () => {
   const [playerBuffs, setPlayerBuffs] = useState<PlayerBuff[]>([]);
 
   // ヘイスト（行動力）システム
-  const [currentHaste, setCurrentHaste] = useState<number>(INITIAL_HERO_STATS.sp);
+  const [currentHaste, setCurrentHaste] = useState<number>(defaultHeroStats.sp);
 
   // Deck Overlay State
   const [isDeckOverlayOpen, setIsDeckOverlayOpen] = useState<boolean>(false);
@@ -100,12 +104,14 @@ const App: React.FC = () => {
   const isHasteEmpty = currentHaste <= 0;
 
   const maxMana = useMemo(() => {
-    return INITIAL_MANA + passives.reduce((acc, p) => p.type === 'score_flat' ? acc + p.value : acc, 0);
-  }, [passives]);
+    const baseMana = gameData?.heroData.mana ?? defaultMana;
+    return baseMana + passives.reduce((acc, p) => p.type === 'score_flat' ? acc + p.value : acc, 0);
+  }, [passives, gameData]);
 
   const maxLife = useMemo(() => {
-    return INITIAL_LIFE + passives.reduce((acc, p) => p.type === 'max_life_boost' ? acc + p.value : acc, 0);
-  }, [passives]);
+    const baseLife = gameData?.heroData.life ?? defaultLife;
+    return baseLife + passives.reduce((acc, p) => p.type === 'max_life_boost' ? acc + p.value : acc, 0);
+  }, [passives, gameData]);
 
   const totalFlatDamageBonus = useMemo(() => {
     return passives.reduce((acc, p) => p.type === 'flat_damage_bonus' ? acc + p.value : acc, 0);
@@ -227,15 +233,16 @@ const App: React.FC = () => {
     setStack([]);
     setCurrentComboPower(0);
     setPassives([]);
-    setMana(INITIAL_MANA);
-    setLife(INITIAL_LIFE);
+    const heroData = gameData?.heroData;
+    setMana(heroData?.mana ?? defaultMana);
+    setLife(heroData?.life ?? defaultLife);
     setGold(0);
     setLevel(1);
-    setHeroStats(INITIAL_HERO_STATS);
+    setHeroStats(heroData?.stats ?? defaultHeroStats);
     setGameState('PLAYING');
     setIsDeckOverlayOpen(false);
     setIsEnemyPoisoned(false);
-    setCurrentHaste(INITIAL_HERO_STATS.sp);
+    setCurrentHaste(heroData?.stats.sp ?? defaultHeroStats.sp);
     setPlayerBuffs([]);
 
     const initialEnemy = getEnemyForLevel(1);
@@ -283,8 +290,8 @@ const App: React.FC = () => {
     setShopCards(shuffledCards.slice(0, 5).map(s => createSkillWithId(s)));
 
     // Generate 1 random passive
-    const shuffledPassives = [...PASSIVE_POOL].sort(() => 0.5 - Math.random());
-    setShopPassive(shuffledPassives[0]);
+    const shuffledPassives = [...(gameData.passivePool || [])].sort(() => 0.5 - Math.random());
+    setShopPassive(shuffledPassives[0] || null);
 
     setPurchasedIds(new Set());
     setHasBoughtLife(false);
@@ -333,7 +340,7 @@ const App: React.FC = () => {
   };
 
   const generateShopOptions = () => {
-    const shuffled = [...PASSIVE_POOL].sort(() => 0.5 - Math.random());
+    const shuffled = [...(gameData?.passivePool || [])].sort(() => 0.5 - Math.random());
     setShopOptions(shuffled.slice(0, 3));
   };
 
@@ -674,7 +681,7 @@ const App: React.FC = () => {
                   return (
                     <div key={`${skill.id}-${idx}`} className={`relative transition-all duration-300 h-[145px] md:h-[180px] lg:h-[210px] ${!isAvailable ? 'opacity-40 grayscale' : ''}`}>
                       <div className="transform scale-[0.65] md:scale-[0.8] lg:scale-[0.95] origin-top">
-                        <Card skill={skill} onClick={() => {}} disabled={false} mana={999} heroStats={heroStats} />
+                        <Card skill={skill} onClick={() => {}} disabled={false} mana={999} currentHaste={999} heroStats={heroStats} />
                       </div>
                       {!isAvailable && (
                         <div className="absolute top-1 right-1 px-1.5 py-0.5 bg-red-900/90 rounded text-[8px] font-black text-white uppercase tracking-wider shadow-lg">
@@ -783,7 +790,7 @@ const App: React.FC = () => {
                     {gameData.initialSkills.map((skill, idx) => (
                       <div key={`initial-${skill.name}-${idx}`} className="relative transition-all duration-300 h-[145px] md:h-[180px] lg:h-[210px]">
                         <div className="transform scale-[0.65] md:scale-[0.8] lg:scale-[0.95] origin-top">
-                          <Card skill={skill} onClick={() => {}} disabled={false} mana={999} heroStats={heroStats} />
+                          <Card skill={skill} onClick={() => {}} disabled={false} mana={999} currentHaste={999} heroStats={heroStats} />
                         </div>
                       </div>
                     ))}
@@ -800,7 +807,7 @@ const App: React.FC = () => {
                     {gameData.skillPool.map((skill, idx) => (
                       <div key={`pool-${skill.name}-${idx}`} className="relative transition-all duration-300 h-[145px] md:h-[180px] lg:h-[210px]">
                         <div className="transform scale-[0.65] md:scale-[0.8] lg:scale-[0.95] origin-top">
-                          <Card skill={skill} onClick={() => {}} disabled={false} mana={999} heroStats={heroStats} />
+                          <Card skill={skill} onClick={() => {}} disabled={false} mana={999} currentHaste={999} heroStats={heroStats} />
                         </div>
                       </div>
                     ))}
@@ -1015,7 +1022,7 @@ const App: React.FC = () => {
                                     <div key={card.id} className="relative flex flex-col items-center pb-1">
                                         <div className="h-[180px]">
                                           <div className="transform scale-[0.8] origin-top">
-                                            <Card skill={card} onClick={() => {}} disabled={false} mana={999} heroStats={heroStats} />
+                                            <Card skill={card} onClick={() => {}} disabled={false} mana={999} currentHaste={999} heroStats={heroStats} />
                                           </div>
                                         </div>
                                         {/* 所持数（購入ボタンの上） */}
@@ -1057,61 +1064,12 @@ const App: React.FC = () => {
             )}
             {gameState === 'PLAYING' && (
                 <div className="flex flex-col gap-2 flex-1">
-                    {/* プレイヤーバフ表示（常に表示・横スクロール対応） */}
-                    <div className="flex items-center gap-2 min-h-[1rem] w-full">
-                      <span className="text-[0.5rem] font-black text-slate-500 uppercase shrink-0">BUFFS:</span>
-                      <div className="relative flex-1 min-w-0">
-                        <div className="flex items-center gap-2 overflow-x-auto no-scrollbar py-3 -my-3">
-                          {playerBuffs.map(buff => (
-                            <Tooltip key={buff.id} content={buff.description}>
-                              <div
-                                className={`flex items-center gap-1 px-2 py-0.5 rounded-full border transition-all animate-in fade-in zoom-in duration-300 shrink-0 cursor-pointer ${
-                                  buff.type === 'charge'
-                                    ? 'bg-yellow-900/50 border-yellow-600'
-                                    : buff.type === 'stat_up'
-                                    ? 'bg-green-900/50 border-green-600'
-                                    : 'bg-red-900/50 border-red-600'
-                                }`}
-                              >
-                                <SafeImage src={buff.icon} alt={buff.name} className="w-4 h-4 object-contain" />
-                                <span className={`text-[0.5rem] font-black whitespace-nowrap ${
-                                  buff.type === 'charge'
-                                    ? 'text-yellow-400'
-                                    : buff.type === 'stat_up'
-                                    ? 'text-green-400'
-                                    : 'text-red-400'
-                                }`}>
-                                  {buff.name}
-                                  {buff.stat && ` +${buff.value}`}
-                                </span>
-                              </div>
-                            </Tooltip>
-                          ))}
-                        </div>
-                      </div>
-                    </div>
-
                     {/* HASTEとMANAゲージ */}
                     <div className="flex flex-col gap-2 w-full">
                       {/* HASTEゲージ + ライフ表示 */}
                       <div className="flex flex-col gap-0">
-                        {/* AD/AP表示（左）とライフ表示（右） */}
-                        <div className="flex justify-between items-center mb-0.5">
-                          {/* AD/AP */}
-                          <div className="flex items-center gap-2">
-                            <span className="text-[0.5rem] font-black text-slate-500">基礎パラメータ：</span>
-                            <div className="flex items-center gap-1 px-2 py-0.5 bg-orange-950/50 border border-orange-700/50 rounded">
-                              <Swords className="w-3 h-3 text-orange-400" />
-                              <span className="text-[0.5rem] font-black text-orange-400 uppercase">AD</span>
-                              <span className="text-[0.625rem] font-black text-orange-300">{heroStats.ad}</span>
-                            </div>
-                            <div className="flex items-center gap-1 px-2 py-0.5 bg-purple-950/50 border border-purple-700/50 rounded">
-                              <Sparkles className="w-3 h-3 text-purple-400" />
-                              <span className="text-[0.5rem] font-black text-purple-400 uppercase">AP</span>
-                              <span className="text-[0.625rem] font-black text-purple-300">{heroStats.ap}</span>
-                            </div>
-                          </div>
-                          {/* ライフ */}
+                        {/* ライフ表示 */}
+                        <div className="flex justify-end items-center mb-0.5">
                           <div className="flex items-center gap-1">
                             <span className="text-[0.5rem] font-black text-slate-400 uppercase">Life</span>
                             <div className="flex items-center gap-0.5">
@@ -1189,12 +1147,65 @@ const App: React.FC = () => {
                           <span className="text-[0.5rem] font-black ml-0.5">-1</span>
                         </div>
                       </div>
+
+                      {/* 基礎パラメータとBUFFS */}
+                      <div className="flex items-center justify-between gap-2 mt-1">
+                        {/* 基礎パラメータ AD/AP */}
+                        <div className="flex items-center gap-2">
+                          <span className="text-[0.5rem] font-black text-slate-500">基礎パラメータ：</span>
+                          <Tooltip content={"物理ダメージが上昇する。\nカードによって倍率は異なり、倍率が高いほど後半にダメージがスケールしやすい。"}>
+                            <div className="flex items-center gap-1 px-2 py-0.5 bg-orange-950/50 border border-orange-700/50 rounded cursor-pointer hover:bg-orange-900/50 transition-colors">
+                              <Swords className="w-3 h-3 text-orange-400" />
+                              <span className="text-[0.5rem] font-black text-orange-400 uppercase">AD</span>
+                              <span className="text-[0.625rem] font-black text-orange-300">{heroStats.ad}</span>
+                            </div>
+                          </Tooltip>
+                          <Tooltip content={"魔法ダメージが上昇する。\n魔法の方がダメージ倍率の低いカードが多い傾向。"}>
+                            <div className="flex items-center gap-1 px-2 py-0.5 bg-cyan-950/50 border border-cyan-700/50 rounded cursor-pointer hover:bg-cyan-900/50 transition-colors">
+                              <Sparkles className="w-3 h-3 text-cyan-400" />
+                              <span className="text-[0.5rem] font-black text-cyan-400 uppercase">AP</span>
+                              <span className="text-[0.625rem] font-black text-cyan-300">{heroStats.ap}</span>
+                            </div>
+                          </Tooltip>
+                        </div>
+                        {/* BUFFS */}
+                        <div className="flex items-center gap-2 min-w-0">
+                          <span className="text-[0.5rem] font-black text-slate-500 uppercase shrink-0">BUFFS:</span>
+                          <div className="flex items-center gap-1 overflow-x-auto no-scrollbar">
+                            {playerBuffs.map(buff => (
+                              <Tooltip key={buff.id} content={buff.description}>
+                                <div
+                                  className={`flex items-center gap-1 px-2 py-0.5 rounded-full border transition-all animate-in fade-in zoom-in duration-300 shrink-0 cursor-pointer ${
+                                    buff.type === 'charge'
+                                      ? 'bg-yellow-900/50 border-yellow-600'
+                                      : buff.type === 'stat_up'
+                                      ? 'bg-green-900/50 border-green-600'
+                                      : 'bg-red-900/50 border-red-600'
+                                  }`}
+                                >
+                                  <SafeImage src={buff.icon} alt={buff.name} className="w-4 h-4 object-contain" />
+                                  <span className={`text-[0.5rem] font-black whitespace-nowrap ${
+                                    buff.type === 'charge'
+                                      ? 'text-yellow-400'
+                                      : buff.type === 'stat_up'
+                                      ? 'text-green-400'
+                                      : 'text-red-400'
+                                  }`}>
+                                    {buff.name}
+                                    {buff.stat && ` +${buff.value}`}
+                                  </span>
+                                </div>
+                              </Tooltip>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
                     </div>
 
                     <div className="flex flex-col gap-2 md:gap-4 flex-1">
                         {hand.length > 0 ? (
                             <div className="flex justify-center gap-1.5 md:gap-3 animate-in slide-in-from-bottom-4 overflow-x-auto pb-1.5 no-scrollbar">
-                                {hand.map((item) => <div key={item.id} className="flex-1 max-w-[30%]"><Card skill={item} onClick={() => selectSkill(item)} disabled={isTargetMet || isMonsterAttacking || turnResetMessage} mana={mana} heroStats={heroStats} physicalMultiplier={battleEvent.physicalMultiplier} magicMultiplier={battleEvent.magicMultiplier} effectsDisabled={isEffectDisabled(item)} /></div>)}
+                                {hand.map((item) => <div key={item.id} className="flex-1 max-w-[30%]"><Card skill={item} onClick={() => selectSkill(item)} disabled={isTargetMet || isMonsterAttacking || turnResetMessage} mana={mana} currentHaste={currentHaste} heroStats={heroStats} physicalMultiplier={battleEvent.physicalMultiplier} magicMultiplier={battleEvent.magicMultiplier} effectsDisabled={isEffectDisabled(item)} /></div>)}
                             </div>
                         ) : (
                             <div className="flex-1 flex items-center justify-center text-center p-4">
@@ -1271,7 +1282,7 @@ const App: React.FC = () => {
                 <div className="w-full flex flex-col items-center flex-1 justify-center py-2 animate-in slide-in-from-bottom-10">
                     <div className="flex items-center gap-2 mb-3"><PlusCircle size={20} className="text-green-400" /><h2 className="text-base font-fantasy font-black text-white tracking-[0.1em] uppercase">Choose a Reward</h2></div>
                     <div className="flex justify-center gap-1.5 md:gap-3 w-full mb-4">
-                        {cardRewards.map((reward, i) => <div key={reward.id} className="min-w-[85px] md:min-w-[100px] flex-1 card-entry" style={{ animationDelay: `${i * 0.1}s` }}><Card skill={reward} onClick={() => selectRewardCard(reward)} disabled={false} mana={999} heroStats={heroStats} /></div>)}
+                        {cardRewards.map((reward, i) => <div key={reward.id} className="min-w-[85px] md:min-w-[100px] flex-1 card-entry" style={{ animationDelay: `${i * 0.1}s` }}><Card skill={reward} onClick={() => selectRewardCard(reward)} disabled={false} mana={999} currentHaste={999} heroStats={heroStats} /></div>)}
                     </div>
                     <button onClick={() => handleBattleWinFinish(permanentDeck)} className="text-[10px] text-slate-500 hover:text-white transition-colors underline uppercase tracking-widest">Skip and Continue</button>
                 </div>

@@ -8,6 +8,7 @@ export const Card: React.FC<CardProps> = ({
   onClick,
   disabled,
   mana,
+  currentHaste,
   heroStats,
   physicalMultiplier = 1,
   magicMultiplier = 1,
@@ -32,20 +33,16 @@ export const Card: React.FC<CardProps> = ({
   const hasPhysicalRatio = skill.adRatio > 0;
   const hasMagicRatio = skill.apRatio > 0;
   const hasOnlyBaseDamage = hasBaseDamage && !hasPhysicalRatio && !hasMagicRatio;
+  const hasMixedDamage = hasPhysicalRatio && hasMagicRatio;  // 物理+魔法の混合
   const hasDamage = hasBaseDamage || hasPhysicalRatio || hasMagicRatio;
-
-  // 計算式を生成（例: "基礎70 + 100%AD"）
-  const formulaParts: string[] = [];
-  if (hasBaseDamage) formulaParts.push(`基礎${baseDamage}`);
-  if (hasPhysicalRatio) formulaParts.push(`${skill.adRatio}%AD`);
-  if (hasMagicRatio) formulaParts.push(`${skill.apRatio}%AP`);
-  const formula = formulaParts.join(' + ');
 
   const isPhysicalUp = physicalMultiplier > 1;
   const isPhysicalDown = physicalMultiplier < 1;
   const isMagicUp = magicMultiplier > 1;
   const isMagicDown = magicMultiplier < 1;
-  const canAfford = mana >= skill.manaCost;
+  const canAffordMana = mana >= skill.manaCost;
+  const canAffordHaste = currentHaste >= skill.delay;
+  const canAfford = canAffordMana && canAffordHaste;
 
   const handleImgError = () => {
     setImgSrc('https://img.icons8.com/fluency/144/star.png');
@@ -116,45 +113,6 @@ export const Card: React.FC<CardProps> = ({
           </h3>
       </div>
 
-      {/* ダメージと係数表記 */}
-      <div className="flex flex-col items-center gap-0.5 mt-0.5 z-10">
-        {hasDamage && (
-          <div className={`flex flex-col items-center px-2 py-0.5 rounded leading-tight ${
-            hasOnlyBaseDamage
-              ? 'bg-white'  // 基礎ダメージのみは白背景
-              : hasMagicRatio && !hasPhysicalRatio
-                ? (isMagicDown ? 'bg-red-600' : 'bg-indigo-600')  // 魔法のみ
-                : (isPhysicalDown ? 'bg-red-600' : 'bg-orange-600')  // 物理含む
-          }`}>
-            <div className="flex items-center gap-1">
-              {hasOnlyBaseDamage ? (
-                <Swords className="w-3 h-3 text-slate-700" />
-              ) : hasMagicRatio && !hasPhysicalRatio ? (
-                <Wand2 className="w-3 h-3 text-white" />
-              ) : (
-                <Swords className="w-3 h-3 text-white" />
-              )}
-              <span className={`text-[0.75rem] font-black ${hasOnlyBaseDamage ? 'text-slate-900' : 'text-white'}`}>
-                {totalDamage}
-              </span>
-              <span className={`text-[0.5rem] font-bold ${hasOnlyBaseDamage ? 'text-slate-700' : 'text-white'}`}>ダメージ</span>
-              {(isPhysicalUp || isMagicUp) && <span className="text-[0.5rem] text-green-300 font-black">↑</span>}
-              {(isPhysicalDown || isMagicDown) && <span className={`text-[0.5rem] font-black ${hasOnlyBaseDamage ? 'text-red-600' : 'text-white'}`}>↓</span>}
-            </div>
-            <span className={`text-[0.5rem] font-bold leading-none ${hasOnlyBaseDamage ? 'text-slate-500' : 'text-white/70'}`}>({formula})</span>
-          </div>
-        )}
-        {!hasDamage && (
-          <div className="flex flex-col items-center px-2 py-0.5 rounded border border-slate-600 bg-transparent leading-tight">
-            <div className="flex items-center gap-1">
-              <span className="text-[0.75rem] font-black text-slate-500">-</span>
-              <span className="text-[0.5rem] font-bold text-slate-500">ダメージなし</span>
-            </div>
-            <span className="text-[0.5rem] text-slate-600 leading-none">-</span>
-          </div>
-        )}
-      </div>
-
       {/* カードタイプ */}
       <span className={`text-[0.5rem] font-black leading-none mt-0.5 py-0.5 z-10 ${
         skill.cardType === 'support'
@@ -164,8 +122,58 @@ export const Card: React.FC<CardProps> = ({
         {skill.cardType === 'support' ? 'サポート' : 'アタック'}
       </span>
 
-      {/* Effect Description */}
-      <div className={`w-full flex-1 rounded-b px-2 py-1 border-t flex items-start justify-center mt-0.5 ${effectsDisabled ? 'bg-slate-950 border-slate-800' : 'bg-slate-800/50 border-slate-700'}`}>
+      {/* ダメージ表記 */}
+      <div className="flex flex-col items-center gap-0.5 mt-0.5 z-10">
+        {hasDamage && (
+          <div className={`flex items-center gap-1 px-2 py-0.5 rounded leading-tight ${
+            hasOnlyBaseDamage
+              ? 'bg-white'  // 基礎ダメージのみは白背景
+              : hasMixedDamage
+                ? 'bg-gradient-to-br from-orange-600 to-cyan-500'  // 物理+魔法は斜めグラデ
+                : hasMagicRatio
+                  ? (isMagicDown ? 'bg-red-600' : 'bg-cyan-600')  // 魔法のみ
+                  : (isPhysicalDown ? 'bg-red-600' : 'bg-orange-600')  // 物理のみ
+          }`}>
+            <span className={`text-[0.75rem] font-black ${hasOnlyBaseDamage ? 'text-slate-900' : 'text-white'}`}>
+              {totalDamage}
+            </span>
+            <span className={`text-[0.5rem] font-bold ${hasOnlyBaseDamage ? 'text-slate-700' : 'text-white'}`}>ダメージ</span>
+            {(isPhysicalUp || isMagicUp) && <span className="text-[0.5rem] text-green-300 font-black">↑</span>}
+            {(isPhysicalDown || isMagicDown) && <span className={`text-[0.5rem] font-black ${hasOnlyBaseDamage ? 'text-red-600' : 'text-white'}`}>↓</span>}
+          </div>
+        )}
+        {!hasDamage && (
+          <div className="flex items-center gap-1 px-2 py-0.5 rounded border border-slate-600 bg-transparent leading-tight">
+            <span className="text-[0.75rem] font-black text-slate-500">-</span>
+            <span className="text-[0.5rem] font-bold text-slate-500">ダメージなし</span>
+          </div>
+        )}
+      </div>
+
+      {/* Effect Description with Formula */}
+      <div className={`w-full flex-1 rounded-b px-2 py-1 border-t flex flex-col items-center justify-start mt-0.5 ${effectsDisabled ? 'bg-slate-950 border-slate-800' : 'bg-slate-800/50 border-slate-700'}`}>
+          {/* 計算式（1行目） */}
+          {hasDamage && (
+            <div className="flex items-center gap-0.5 text-[0.6rem] font-bold text-slate-400 mb-0.5">
+              <span>=</span>
+              {hasBaseDamage && <span>{baseDamage}</span>}
+              {hasBaseDamage && (hasPhysicalRatio || hasMagicRatio) && <span>+</span>}
+              {hasPhysicalRatio && (
+                <>
+                  <Swords className="w-3 h-3 text-orange-400" />
+                  <span className="text-orange-400">×{(skill.adRatio / 100).toFixed(1)}</span>
+                </>
+              )}
+              {hasPhysicalRatio && hasMagicRatio && <span>+</span>}
+              {hasMagicRatio && (
+                <>
+                  <Wand2 className="w-3 h-3 text-cyan-400" />
+                  <span className="text-cyan-400">×{(skill.apRatio / 100).toFixed(1)}</span>
+                </>
+              )}
+            </div>
+          )}
+          {/* 説明文 */}
           <p className={`text-[0.55rem] text-center leading-relaxed font-medium ${effectsDisabled ? 'text-slate-600 line-through' : 'text-slate-300'}`}>
               {skill.effect ? skill.effect.description : "通常技"}
           </p>
@@ -174,7 +182,9 @@ export const Card: React.FC<CardProps> = ({
       {!canAfford && (
         <div className="absolute inset-0 bg-red-950/20 backdrop-blur-[1px] flex flex-col items-center justify-center pointer-events-none">
           <Ban className="text-red-500 opacity-50 mb-1" size={32} />
-          <span className="text-[0.625rem] text-red-400 font-bold">MANA不足</span>
+          <span className="text-[0.625rem] text-red-400 font-bold">
+            {!canAffordHaste ? 'HASTE不足' : 'MANA不足'}
+          </span>
         </div>
       )}
     </button>

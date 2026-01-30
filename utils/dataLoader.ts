@@ -1,5 +1,5 @@
 import { loadCSV } from './csvParser';
-import { Skill, Enemy, BattleEvent, SkillEffect, EffectType, EffectTrigger, EffectParams, CardType, Rarity } from '../types';
+import { Skill, Enemy, BattleEvent, SkillEffect, EffectType, EffectTrigger, EffectParams, CardType, Rarity, PassiveEffect, HeroStats } from '../types';
 
 // CSVから読み込む生データの型
 interface RawSkill {
@@ -30,6 +30,33 @@ interface RawEnemy {
   minFloor: number;
   maxFloor: number;
   traitId: string;
+}
+
+interface RawHero {
+  ad: number;
+  ap: number;
+  sp: number;
+  mp: number;
+  mana: number;
+  life: number;
+}
+
+interface RawPassive {
+  id: string;
+  name: string;
+  icon: string;
+  description: string;
+  type: string;
+  value: number;
+  rarity: string;
+  targetCategory: string;
+}
+
+// ヒーロー初期データ
+export interface HeroInitialData {
+  stats: HeroStats;
+  mana: number;
+  life: number;
 }
 
 // Trait定義（敵の特性）- 物理/魔法ダメージ倍率
@@ -211,6 +238,34 @@ function convertToEnemy(raw: RawEnemy): Enemy {
   };
 }
 
+// RawHero → HeroInitialData 変換
+function convertToHeroData(raw: RawHero): HeroInitialData {
+  return {
+    stats: {
+      ad: raw.ad,
+      ap: raw.ap,
+      sp: raw.sp,
+      mp: raw.mp
+    },
+    mana: raw.mana,
+    life: raw.life
+  };
+}
+
+// RawPassive → PassiveEffect 変換
+function convertToPassive(raw: RawPassive): PassiveEffect {
+  return {
+    id: raw.id,
+    name: raw.name,
+    icon: raw.icon,
+    description: raw.description,
+    type: raw.type as PassiveEffect['type'],
+    value: raw.value,
+    rarity: raw.rarity as Rarity,
+    ...(raw.targetCategory ? { targetCategory: raw.targetCategory } : {})
+  };
+}
+
 // スキルをIDつきで生成
 export function createSkillWithId(skill: Omit<Skill, 'id'>): Skill {
   return { ...skill, id: generateId() };
@@ -221,16 +276,26 @@ export interface GameData {
   initialSkills: Omit<Skill, 'id'>[];
   skillPool: Omit<Skill, 'id'>[];
   enemies: Enemy[];
+  heroData: HeroInitialData;
+  passivePool: PassiveEffect[];
 }
 
 export async function loadGameData(): Promise<GameData> {
-  const [rawSkills, rawEnemies] = await Promise.all([
+  const [rawSkills, rawEnemies, rawHeroes, rawPassives] = await Promise.all([
     loadCSV<RawSkill>('/data/skills.csv'),
-    loadCSV<RawEnemy>('/data/enemies.csv')
+    loadCSV<RawEnemy>('/data/enemies.csv'),
+    loadCSV<RawHero>('/data/hero.csv'),
+    loadCSV<RawPassive>('/data/passives.csv')
   ]);
 
   const allSkills = rawSkills.map(convertToSkill);
   const enemies = rawEnemies.map(convertToEnemy);
+  const heroData = rawHeroes.length > 0 ? convertToHeroData(rawHeroes[0]) : {
+    stats: { ad: 30, ap: 10, sp: 30, mp: 50 },
+    mana: 50,
+    life: 2
+  };
+  const passivePool = rawPassives.map(convertToPassive);
 
   // 初期スキル: スラッシュ、ハイスラッシュ、ためる
   const initialSkillNames = ['スラッシュ', 'ハイスラッシュ', 'ためる'];
@@ -242,6 +307,8 @@ export async function loadGameData(): Promise<GameData> {
   return {
     initialSkills,
     skillPool,
-    enemies
+    enemies,
+    heroData,
+    passivePool
   };
 }

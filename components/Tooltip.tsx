@@ -47,7 +47,7 @@ export const Tooltip: React.FC<TooltipProps> = ({ children, content, className =
           }}
         >
           <div className="absolute top-full left-3 border-4 border-transparent border-t-slate-700"></div>
-          <div className="text-[0.5625rem] text-slate-200">{content}</div>
+          <div className="text-[0.5625rem] text-slate-200 whitespace-pre-line">{content}</div>
         </div>,
         document.body
       )}
