@@ -9,4 +9,8 @@ glasses,メガネ,https://img.icons8.com/fluency/144/glasses.png,AP（魔法攻�
 combo_master,ヘイストマスター,https://img.icons8.com/fluency/144/fire-element.png,ヘイストの上限が +10 増加します。,capacity_boost,10,,SSR,
 attorney_badge,弁護士バッジ,https://img.icons8.com/fluency/144/law.png,ライフの最大値が1つ増えます。,max_life_boost,1,,SSR,
 enhancer,増強剤,https://img.icons8.com/fluency/144/biotech.png,ダメージを与えるたび +20 の確定ダメージ。,flat_damage_bonus,20,,C,
+minor_heal,小回復の護符,https://img.icons8.com/fluency/144/pill.png,マナの上限が +10 されます。,score_flat,10,,C,
+minor_strength,力のお守り,https://img.icons8.com/fluency/144/strength.png,AD（物理攻撃力）が +2 されます。,ad_boost,2,,C,
+minor_wisdom,知のお守り,https://img.icons8.com/fluency/144/idea.png,AP（魔法攻撃力）が +2 されます。,ap_boost,2,,C,
+lucky_coin,幸運のコイン,https://img.icons8.com/fluency/144/good-luck.png,戦闘終了時にゴールドを +10 獲得。,gold_bonus,10,,C,
 swift_blade,迅速の刃,https://img.icons8.com/fluency/144/running.png,物理ダメージのみのカードのヘイスト消費が半分になる。,physical_haste_reduction,50,,SSR,

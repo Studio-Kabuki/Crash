@@ -30,6 +30,7 @@ interface RawEnemy {
   minFloor: number;
   maxFloor: number;
   traitId: string;
+  dropsAbility: string;
 }
 
 interface RawHero {
@@ -109,6 +110,33 @@ const TRAITS: Record<string, BattleEvent> = {
     physicalMultiplier: 1.0,
     magicMultiplier: 1.0,
     disableSupportEffects: true,
+    type: 'negative'
+  },
+  ANTI_BUFF: {
+    id: 'anti_buff_field',
+    title: 'アンチバフ',
+    description: 'バフカードの効果が無効化されます。',
+    physicalMultiplier: 1.0,
+    magicMultiplier: 1.0,
+    disableBuffEffects: true,
+    type: 'negative'
+  },
+  ARMOR: {
+    id: 'heavy_armor',
+    title: '重装甲',
+    description: '30以下のダメージを完全に無効化します。',
+    physicalMultiplier: 1.0,
+    magicMultiplier: 1.0,
+    armorThreshold: 30,
+    type: 'negative'
+  },
+  MANA_DRAIN: {
+    id: 'mana_drain',
+    title: 'マナ喰らい',
+    description: 'カード使用後、マナを20減少させます。',
+    physicalMultiplier: 1.0,
+    magicMultiplier: 1.0,
+    manaDrainAmount: 20,
     type: 'negative'
   }
 };
@@ -243,7 +271,8 @@ function convertToEnemy(raw: RawEnemy): Enemy {
     baseHP: raw.baseHP,
     minFloor: raw.minFloor,
     maxFloor: raw.maxFloor,
-    trait: TRAITS[raw.traitId] || TRAITS.NEUTRAL
+    trait: TRAITS[raw.traitId] || TRAITS.NEUTRAL,
+    dropsAbility: (raw.dropsAbility === 'Y' || raw.dropsAbility === 'C') ? raw.dropsAbility : 'N'
   };
 }
 

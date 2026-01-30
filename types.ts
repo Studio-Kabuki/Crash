@@ -93,6 +93,9 @@ export interface BattleEvent {
   physicalMultiplier: number;  // 物理ダメージ倍率（1.0 = 等倍）
   magicMultiplier: number;     // 魔法ダメージ倍率（1.0 = 等倍）
   disableSupportEffects?: boolean;  // サポートカードの効果を無効化
+  disableBuffEffects?: boolean;     // バフカードの効果を無効化
+  armorThreshold?: number;          // この値以下のダメージを無効化
+  manaDrainAmount?: number;         // カード使用後に減少させるマナ量
   type: 'positive' | 'negative' | 'neutral';
 }
 
@@ -103,6 +106,7 @@ export interface Enemy {
   minFloor: number;
   maxFloor: number;
   trait?: BattleEvent;
+  dropsAbility: 'N' | 'C' | 'Y';  // N: カード, C: コモンアビリティ, Y: 全アビリティ（エリート）
 }
 
 export type GameState = 'START' | 'PLAYING' | 'LEVEL_CLEAR' | 'BOSS_VICTORY' | 'GAME_OVER' | 'CARD_REWARD' | 'SHOP';

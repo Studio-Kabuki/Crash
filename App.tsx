@@ -4,6 +4,7 @@ import { GameState, Skill, PassiveEffect, BattleEvent, Enemy, Rarity, HeroStats,
 import { loadGameData, GameData, DEFAULT_EVENT, createSkillWithId, BUFFS, BuffDefinition, HeroInitialData } from './utils/dataLoader';
 import { Card } from './components/Card';
 import { Tooltip } from './components/Tooltip';
+import PlayerStatusPanel from './components/PlayerStatusPanel';
 import {
   RotateCcw, Swords, Skull, Zap, ArrowRight, ScrollText,
   ShieldAlert, Sparkles, Ghost, Hexagon,
@@ -86,6 +87,15 @@ const App: React.FC = () => {
 
   // Discard Pile Overlay State (使用済みカード)
   const [isDiscardOpen, setIsDiscardOpen] = useState<boolean>(false);
+
+  // Shop Overlay State
+  const [isShopOverlayOpen, setIsShopOverlayOpen] = useState<boolean>(false);
+
+  // Card Reward Overlay State
+  const [isCardRewardOverlayOpen, setIsCardRewardOverlayOpen] = useState<boolean>(false);
+
+  // Ability Reward Overlay State (エリート撃破後)
+  const [isAbilityRewardOverlayOpen, setIsAbilityRewardOverlayOpen] = useState<boolean>(false);
 
   // Debug Menu Overlay State
   const [isDebugOpen, setIsDebugOpen] = useState<boolean>(false);
@@ -476,8 +486,12 @@ const App: React.FC = () => {
     setHasBoughtLife(true);
   };
 
-  const generateShopOptions = () => {
-    const shuffled = [...(gameData?.passivePool || [])].sort(() => 0.5 - Math.random());
+  const generateShopOptions = (commonOnly: boolean = false) => {
+    let pool = [...(gameData?.passivePool || [])];
+    if (commonOnly) {
+      pool = pool.filter(p => p.rarity === 'C');
+    }
+    const shuffled = pool.sort(() => 0.5 - Math.random());
     setShopOptions(shuffled.slice(0, 3));
   };
 
@@ -505,8 +519,17 @@ const App: React.FC = () => {
         setHeroStats(prev => ({ ...prev, ap: prev.ap + passive.value }));
         setMana(prev => Math.min(prev + (passive.value2 || 0), maxMana + (passive.value2 || 0)));
     }
-    generateCardRewards();
-    setGameState('CARD_REWARD');
+    setIsAbilityRewardOverlayOpen(false);
+
+    // エリート(Y)ならカード選択へ、ザコ(C)なら次のバトルへ
+    if (enemy?.dropsAbility === 'Y') {
+      generateCardRewards();
+      setGameState('CARD_REWARD');
+      setIsCardRewardOverlayOpen(true);
+    } else {
+      // コモンアビリティドロップ（ザコ）の場合は次のバトルへ
+      handleBattleWinFinish(permanentDeck);
+    }
   };
 
   const selectRewardCard = (skill: Skill) => {
@@ -716,7 +739,7 @@ const App: React.FC = () => {
         const newHaste = Math.round(currentHaste - actualDelay);
         setCurrentHaste(newHaste);
 
-        const newStack = [...stack, skill];
+        let newStack = [...stack, skill];
 
         // アタックカードの場合、すべてのchargeバフを消費して合計発動回数を計算
         let repeatCount = 1;
@@ -750,7 +773,12 @@ const App: React.FC = () => {
         const newTotalPower = calculateComboPower(newStack);
         let damageDealt = (newTotalPower - currentComboPower) * repeatCount;
         const poisonDmg = isEnemyPoisoned ? 30 : 0;
-        const finalDamage = damageDealt + poisonDmg;
+        let finalDamage = damageDealt + poisonDmg;
+
+        // ARMORトレイト: 閾値以下のダメージを無効化
+        if (battleEvent.armorThreshold && finalDamage > 0 && finalDamage <= battleEvent.armorThreshold) {
+            finalDamage = 0;
+        }
 
         setEnemyHealth(prev => Math.max(0, prev - finalDamage));
         setCurrentComboPower(newTotalPower);
@@ -784,24 +812,45 @@ const App: React.FC = () => {
              addBuff(skill.effect.params.buffId, skill.effect.params.value);
            }
            if (skill.effect.type === 'permanent_power_up') {
-             // adRatio > 0ならadRatioを増加、そうでなければapRatioを増加
-             const ratioBonus = skill.effect.params.value || 0;
-             setPermanentDeck(prev => prev.map(p => {
-               if (p.id !== skill.id) return p;
-               if (skill.adRatio > 0) {
-                 return { ...p, adRatio: p.adRatio + ratioBonus };
-               } else {
-                 return { ...p, apRatio: p.apRatio + ratioBonus };
-               }
-             }));
+             // ベースダメージを増加
+             const damageBonus = skill.effect.params.value || 0;
+             const updateSkillBaseDamage = (s: Skill) => {
+               if (s.id !== skill.id) return s;
+               return { ...s, baseDamage: s.baseDamage + damageBonus };
+             };
+             // permanentDeck、deck、newStackすべてを更新
+             setPermanentDeck(prev => prev.map(updateSkillBaseDamage));
+             setDeck(prev => prev.map(updateSkillBaseDamage));
+             // newStackも更新（現在の戦闘で反映させるため）
+             newStack = newStack.map(updateSkillBaseDamage);
            }
+        }
+
+        // MANA_DRAINトレイト: カード使用後にマナを減少
+        if (battleEvent.manaDrainAmount) {
+            setMana(prev => Math.max(0, prev - battleEvent.manaDrainAmount!));
         }
 
         if (enemyHealth - finalDamage <= 0) {
             setGold(prev => prev + 40);
             setTimeout(() => {
-                if (level % 4 === 0) { setGameState('BOSS_VICTORY'); generateShopOptions(); }
-                else { generateCardRewards(); setGameState('CARD_REWARD'); }
+                const dropType = enemy?.dropsAbility || 'N';
+                if (dropType === 'Y') {
+                    // エリート: 全レアリティアビリティ→カード
+                    setGameState('BOSS_VICTORY');
+                    generateShopOptions(false);
+                    setIsAbilityRewardOverlayOpen(true);
+                } else if (dropType === 'C') {
+                    // ザコ: コモンアビリティのみ→カードなし
+                    setGameState('BOSS_VICTORY');
+                    generateShopOptions(true);
+                    setIsAbilityRewardOverlayOpen(true);
+                } else {
+                    // 通常: カードのみ
+                    generateCardRewards();
+                    setGameState('CARD_REWARD');
+                    setIsCardRewardOverlayOpen(true);
+                }
             }, 600);
             return;
         }
@@ -919,6 +968,208 @@ const App: React.FC = () => {
               </div>
             </div>
             <button onClick={() => setIsDeckOverlayOpen(false)} className="mt-4 w-full bg-slate-800 hover:bg-slate-700 py-3 rounded-xl font-bold uppercase tracking-widest text-sm">Close Viewer</button>
+          </div>
+        </div>
+      )}
+
+      {/* SHOP OVERLAY */}
+      {isShopOverlayOpen && (
+        <div className="fixed inset-0 z-[100] bg-slate-900/50 backdrop-blur p-4 flex flex-col animate-in fade-in duration-300">
+          <div className="w-full max-w-sm md:max-w-md lg:max-w-lg mx-auto flex flex-col h-full">
+            <div className="flex justify-between items-center mb-4 pb-4 border-b border-slate-800">
+              <div className="flex items-center gap-3">
+                <ShoppingCart className="text-yellow-400" size={24} />
+                <h2 className="font-fantasy text-2xl tracking-[0.2em] uppercase text-slate-100">Shop</h2>
+                <span className="text-yellow-400 text-sm font-bold bg-slate-900 px-3 py-1 rounded-full flex items-center gap-1">
+                  <Coins size={14} /> {gold}G
+                </span>
+              </div>
+              <button onClick={() => setIsShopOverlayOpen(false)} className="p-2 hover:bg-slate-800 rounded-full text-slate-400 hover:text-white"><X size={28} /></button>
+            </div>
+            <div className="flex-1 overflow-y-auto no-scrollbar pb-10">
+              {/* ライフ回復 */}
+              <div className="mb-4 px-2">
+                <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-2">Recovery</h3>
+                <div className="flex items-center gap-2">
+                  <div className={`flex-1 p-3 rounded-lg border-2 flex items-center gap-3 ${
+                    hasBoughtLife ? 'opacity-50 border-slate-700' : 'border-red-500/50 bg-red-950/30'
+                  }`}>
+                    <Heart className={`w-8 h-8 text-red-500 shrink-0 ${hasBoughtLife ? 'grayscale' : 'animate-pulse'}`} />
+                    <div className="flex-1 min-w-0">
+                      <h4 className="font-bold text-slate-100 text-sm uppercase tracking-wide">Life +1</h4>
+                      <p className="text-xs text-slate-400">ライフを1回復</p>
+                    </div>
+                  </div>
+                  {hasBoughtLife ? (
+                    <span className="text-sm text-green-500 font-bold px-4 shrink-0">SOLD</span>
+                  ) : (
+                    <button
+                      onClick={handleBuyLife}
+                      disabled={gold < LIFE_RECOVERY_PRICE || life >= maxLife}
+                      className={`flex items-center gap-1 px-4 py-3 rounded-lg text-sm font-black shrink-0 transition-all ${
+                        gold >= LIFE_RECOVERY_PRICE && life < maxLife
+                          ? 'bg-yellow-600 hover:bg-yellow-500 text-white'
+                          : 'bg-slate-800 text-slate-500 cursor-not-allowed'
+                      }`}
+                    >
+                      <Coins size={16} /> {LIFE_RECOVERY_PRICE}G
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* アビリティ */}
+              <div className="mb-4 px-2">
+                <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-2">Abilities</h3>
+                <div className="flex flex-col gap-2">
+                  {shopPassives.map((passive) => {
+                    const isPurchased = purchasedPassiveIds.has(passive.id);
+                    const price = getPassivePrice(passive.rarity);
+                    const canAfford = gold >= price;
+                    return (
+                      <div key={passive.id} className="flex items-center gap-2">
+                        <div className={`flex-1 p-3 rounded-lg border-2 flex items-center gap-3 ${
+                          isPurchased ? 'opacity-50 border-slate-700' : getRarityColor(passive.rarity)
+                        }`}>
+                          <SafeImage src={passive.icon} alt={passive.name} className={`w-8 h-8 object-contain shrink-0 ${isPurchased ? 'grayscale' : ''}`} />
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2">
+                              <h4 className="font-bold text-slate-100 text-sm uppercase tracking-wide truncate">{passive.name}</h4>
+                              <span className={`text-xs font-black shrink-0 ${passive.rarity === 'SSR' ? 'text-yellow-500' : passive.rarity === 'R' ? 'text-slate-300' : 'text-orange-500'}`}>{passive.rarity}</span>
+                            </div>
+                            <p className="text-xs text-slate-400 truncate">{passive.description}</p>
+                          </div>
+                        </div>
+                        {isPurchased ? (
+                          <span className="text-sm text-green-500 font-bold px-4 shrink-0">SOLD</span>
+                        ) : (
+                          <button
+                            onClick={() => handleBuyPassive(passive)}
+                            disabled={!canAfford}
+                            className={`flex items-center gap-1 px-4 py-3 rounded-lg text-sm font-black shrink-0 transition-all ${
+                              canAfford ? 'bg-indigo-600 hover:bg-indigo-500 text-white' : 'bg-slate-800 text-slate-500 cursor-not-allowed'
+                            }`}
+                          >
+                            <Coins size={16} /> {price}G
+                          </button>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* カード */}
+              <div className="px-2">
+                <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-2">Cards</h3>
+                <div className="grid grid-cols-3 gap-2">
+                  {shopCards.map((card) => {
+                    const isPurchased = purchasedIds.has(card.id);
+                    const price = getCardPrice(card.rarity);
+                    const canAfford = gold >= price;
+                    const ownedCount = permanentDeck.filter(d => d.name === card.name).length;
+
+                    return (
+                      <div key={card.id} className="relative flex flex-col items-center pb-1">
+                        <div className="h-[180px] md:h-[210px] lg:h-[240px]">
+                          <div className="transform scale-[0.8] md:scale-[0.95] lg:scale-100 origin-top">
+                            <Card skill={card} onClick={() => {}} disabled={false} mana={999} currentHaste={999} heroStats={heroStats} />
+                          </div>
+                        </div>
+                        {ownedCount > 0 && (
+                          <div className="text-slate-400 text-[9px] font-black">
+                            所持:{ownedCount}
+                          </div>
+                        )}
+                        {isPurchased ? (
+                          <div className="bg-green-600 text-white text-xs font-black px-3 py-1 rounded-full shadow-lg flex items-center gap-1">
+                            <Check size={12} /> SOLD
+                          </div>
+                        ) : (
+                          <button
+                            onClick={() => handleBuyCard(card)}
+                            disabled={!canAfford}
+                            className={`flex items-center gap-1 px-3 py-1 rounded-full text-xs font-black shadow-xl transition-all ${canAfford ? 'bg-indigo-600 hover:bg-indigo-500 text-white' : 'bg-slate-800 text-slate-500 cursor-not-allowed'}`}
+                          >
+                            <Coins size={12} /> {price}G
+                          </button>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+            <button onClick={() => setIsShopOverlayOpen(false)} className="mt-4 w-full bg-yellow-600 hover:bg-yellow-500 py-3 rounded-xl font-bold uppercase tracking-widest text-sm text-white">Close Shop</button>
+          </div>
+        </div>
+      )}
+
+      {/* CARD REWARD OVERLAY */}
+      {isCardRewardOverlayOpen && (
+        <div className="fixed inset-0 z-[100] bg-slate-900/50 backdrop-blur p-4 flex flex-col animate-in fade-in duration-300">
+          <div className="w-full max-w-md md:max-w-lg lg:max-w-xl mx-auto flex flex-col h-full justify-center">
+            <div className="flex justify-between items-center mb-6 pb-4 border-b border-slate-800">
+              <div className="flex items-center gap-3">
+                <PlusCircle className="text-green-400" size={24} />
+                <h2 className="font-fantasy text-2xl tracking-[0.2em] uppercase text-slate-100">Choose a Reward</h2>
+              </div>
+              <button onClick={() => setIsCardRewardOverlayOpen(false)} className="p-2 hover:bg-slate-800 rounded-full text-slate-400 hover:text-white"><X size={28} /></button>
+            </div>
+            <div className="flex justify-center gap-3 md:gap-4 w-full mb-6">
+              {cardRewards.map((reward, i) => (
+                <div key={reward.id} className="flex-1 max-w-[140px] md:max-w-[160px] card-entry" style={{ animationDelay: `${i * 0.1}s` }}>
+                  <Card
+                    skill={reward}
+                    onClick={() => { selectRewardCard(reward); setIsCardRewardOverlayOpen(false); }}
+                    disabled={false}
+                    mana={999}
+                    currentHaste={999}
+                    heroStats={heroStats}
+                  />
+                </div>
+              ))}
+            </div>
+            <button
+              onClick={() => { handleBattleWinFinish(permanentDeck); setIsCardRewardOverlayOpen(false); }}
+              className="w-full bg-slate-800 hover:bg-slate-700 py-3 rounded-xl font-bold uppercase tracking-widest text-sm text-slate-400 hover:text-white transition-all"
+            >
+              スキップして進む
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ABILITY REWARD OVERLAY */}
+      {isAbilityRewardOverlayOpen && (
+        <div className="fixed inset-0 z-[100] bg-slate-900/50 backdrop-blur p-4 flex flex-col animate-in fade-in duration-300">
+          <div className="w-full max-w-md md:max-w-lg mx-auto flex flex-col h-full justify-center">
+            <div className="flex justify-between items-center mb-6 pb-4 border-b border-slate-800">
+              <div className="flex items-center gap-3">
+                <Award className="text-indigo-400" size={24} />
+                <h2 className="font-fantasy text-2xl tracking-[0.2em] uppercase text-slate-100">Ability Upgrade</h2>
+              </div>
+              <button onClick={() => setIsAbilityRewardOverlayOpen(false)} className="p-2 hover:bg-slate-800 rounded-full text-slate-400 hover:text-white"><X size={28} /></button>
+            </div>
+            <div className="flex flex-col gap-3 w-full mb-6">
+              {shopOptions.map((option) => (
+                <button
+                  key={option.id}
+                  onClick={() => selectPassive(option)}
+                  className={`w-full bg-slate-900/80 p-4 rounded-xl border-2 hover:brightness-125 transition-all text-left flex items-center gap-4 group ${getRarityColor(option.rarity)}`}
+                >
+                  <SafeImage src={option.icon} alt={option.name} className="w-12 h-12 object-contain shrink-0" />
+                  <div className="flex-1">
+                    <div className="flex justify-between items-center mb-1">
+                      <h3 className="font-bold text-slate-100 text-sm uppercase tracking-widest">{option.name}</h3>
+                      <span className={`text-xs font-black px-2 py-0.5 rounded ${option.rarity === 'SSR' ? 'bg-yellow-600 text-white' : option.rarity === 'R' ? 'bg-slate-600 text-white' : 'bg-orange-600 text-white'}`}>{option.rarity}</span>
+                    </div>
+                    <p className="text-xs text-slate-400">{option.description}</p>
+                  </div>
+                  <ArrowRight className="text-slate-600 group-hover:text-indigo-400 transition-colors" size={20} />
+                </button>
+              ))}
+            </div>
           </div>
         </div>
       )}
@@ -1295,138 +1546,114 @@ const App: React.FC = () => {
                     </div>
                 )}
 
-                {gameState === 'SHOP' && (
-                    <div className="flex flex-col items-center w-full animate-in zoom-in duration-500 pt-2 overflow-y-auto no-scrollbar max-h-[500px]">
-                        <ShoppingCart className="text-yellow-500 mb-1 opacity-30" size={32} />
-                        <h2 className="text-lg font-fantasy font-black text-yellow-400 tracking-[0.15em] uppercase mb-2 text-shadow-lg">Shop</h2>
+                {gameState === 'CARD_REWARD' && (
+                    <div className="relative flex flex-col items-center justify-center w-full h-full animate-in zoom-in duration-500">
+                        {/* デッキビュワーボタン（左下）- バトル中と同じ */}
+                        <div className="absolute bottom-1 left-1 md:bottom-2 md:left-2 z-40">
+                          <button onClick={() => setIsDeckOverlayOpen(true)} className="flex items-center gap-1.5 px-2 py-1 bg-slate-900/90 backdrop-blur-md border border-indigo-500/40 rounded-lg text-[9px] font-black text-indigo-300 uppercase tracking-widest hover:bg-slate-800 transition-all shadow-xl">
+                            <Layers size={12} />
+                            <span>DECK</span>
+                            <span className="px-1.5 py-0.5 bg-indigo-600 rounded text-white text-[8px]">{permanentDeck.length}</span>
+                          </button>
+                        </div>
+
+                        {/* 勝利アイコン */}
+                        <div className="relative mb-6">
+                            <div className="w-32 h-32 bg-gradient-to-b from-green-900/50 to-emerald-950/50 rounded-full flex items-center justify-center border-4 border-green-600/50 shadow-[0_0_40px_rgba(34,197,94,0.3)]">
+                                <Award className="text-green-400" size={64} />
+                            </div>
+                            <div className="absolute -bottom-2 left-1/2 -translate-x-1/2 bg-green-600 px-4 py-1 rounded-full">
+                                <span className="text-xs font-black text-white uppercase tracking-widest">Victory!</span>
+                            </div>
+                        </div>
 
                         {/* ボタン群 */}
-                        <div className="flex items-center gap-3 mb-3">
+                        <div className="flex flex-col gap-3 w-48">
                             <button
-                                onClick={() => setIsDeckOverlayOpen(true)}
-                                className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-900 border border-indigo-500/40 rounded-lg text-[9px] font-black text-indigo-300 uppercase tracking-widest hover:bg-slate-800 transition-all"
+                                onClick={() => setIsCardRewardOverlayOpen(true)}
+                                className="flex items-center justify-center gap-2 px-6 py-3 bg-green-600 hover:bg-green-500 rounded-xl text-sm font-black text-white uppercase tracking-widest transition-all shadow-lg hover:shadow-green-500/30"
                             >
-                                <Search size={10} /> DECK
+                                <PlusCircle size={18} /> 報酬を見る
+                            </button>
+                            <button
+                                onClick={() => handleBattleWinFinish(permanentDeck)}
+                                className="flex items-center justify-center gap-2 px-6 py-3 bg-slate-700 hover:bg-slate-600 rounded-xl text-sm font-black text-slate-200 uppercase tracking-widest transition-all"
+                            >
+                                <ArrowRight size={18} /> スキップして進む
+                            </button>
+                        </div>
+                    </div>
+                )}
+
+                {gameState === 'BOSS_VICTORY' && (
+                    <div className="relative flex flex-col items-center justify-center w-full h-full animate-in zoom-in duration-500">
+                        {/* デッキビュワーボタン（左下）- バトル中と同じ */}
+                        <div className="absolute bottom-1 left-1 md:bottom-2 md:left-2 z-40">
+                          <button onClick={() => setIsDeckOverlayOpen(true)} className="flex items-center gap-1.5 px-2 py-1 bg-slate-900/90 backdrop-blur-md border border-indigo-500/40 rounded-lg text-[9px] font-black text-indigo-300 uppercase tracking-widest hover:bg-slate-800 transition-all shadow-xl">
+                            <Layers size={12} />
+                            <span>DECK</span>
+                            <span className="px-1.5 py-0.5 bg-indigo-600 rounded text-white text-[8px]">{permanentDeck.length}</span>
+                          </button>
+                        </div>
+
+                        {/* エリート勝利アイコン */}
+                        <div className="relative mb-6">
+                            <div className="w-32 h-32 bg-gradient-to-b from-indigo-900/50 to-purple-950/50 rounded-full flex items-center justify-center border-4 border-indigo-600/50 shadow-[0_0_40px_rgba(99,102,241,0.3)]">
+                                <Star className="text-indigo-400" size={64} />
+                            </div>
+                            <div className="absolute -bottom-2 left-1/2 -translate-x-1/2 bg-indigo-600 px-4 py-1 rounded-full">
+                                <span className="text-xs font-black text-white uppercase tracking-widest">Elite Down!</span>
+                            </div>
+                        </div>
+
+                        {/* ボタン群 */}
+                        <div className="flex flex-col gap-3 w-48">
+                            <button
+                                onClick={() => setIsAbilityRewardOverlayOpen(true)}
+                                className="flex items-center justify-center gap-2 px-6 py-3 bg-indigo-600 hover:bg-indigo-500 rounded-xl text-sm font-black text-white uppercase tracking-widest transition-all shadow-lg hover:shadow-indigo-500/30"
+                            >
+                                <Award size={18} /> 報酬を見る
+                            </button>
+                        </div>
+                    </div>
+                )}
+
+                {gameState === 'SHOP' && (
+                    <div className="relative flex flex-col items-center justify-center w-full h-full animate-in zoom-in duration-500">
+                        {/* デッキビュワーボタン（左下）- バトル中と同じ */}
+                        <div className="absolute bottom-1 left-1 md:bottom-2 md:left-2 z-40">
+                          <button onClick={() => setIsDeckOverlayOpen(true)} className="flex items-center gap-1.5 px-2 py-1 bg-slate-900/90 backdrop-blur-md border border-indigo-500/40 rounded-lg text-[9px] font-black text-indigo-300 uppercase tracking-widest hover:bg-slate-800 transition-all shadow-xl">
+                            <Layers size={12} />
+                            <span>DECK</span>
+                            <span className="px-1.5 py-0.5 bg-indigo-600 rounded text-white text-[8px]">{permanentDeck.length}</span>
+                          </button>
+                        </div>
+
+                        {/* 商人アイコン */}
+                        <div className="relative mb-6">
+                            <div className="w-32 h-32 bg-gradient-to-b from-yellow-900/50 to-amber-950/50 rounded-full flex items-center justify-center border-4 border-yellow-600/50 shadow-[0_0_40px_rgba(234,179,8,0.3)]">
+                                <ShoppingCart className="text-yellow-400" size={64} />
+                            </div>
+                            <div className="absolute -bottom-2 left-1/2 -translate-x-1/2 bg-yellow-600 px-4 py-1 rounded-full">
+                                <span className="text-xs font-black text-white uppercase tracking-widest">Merchant</span>
+                            </div>
+                        </div>
+
+                        {/* ボタン群 */}
+                        <div className="flex flex-col gap-3 w-48">
+                            <button
+                                onClick={() => setIsShopOverlayOpen(true)}
+                                className="flex items-center justify-center gap-2 px-6 py-3 bg-yellow-600 hover:bg-yellow-500 rounded-xl text-sm font-black text-white uppercase tracking-widest transition-all shadow-lg hover:shadow-yellow-500/30"
+                            >
+                                <ShoppingCart size={18} /> ショップを開く
                             </button>
                             <button
                                 onClick={() => nextLevel()}
-                                className="bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white px-6 py-1.5 rounded-full text-[10px] font-black tracking-[0.15em] uppercase border border-slate-700 transition-all flex items-center gap-2"
+                                className="flex items-center justify-center gap-2 px-6 py-3 bg-slate-700 hover:bg-slate-600 rounded-xl text-sm font-black text-slate-200 uppercase tracking-widest transition-all"
                             >
-                                Continue <ArrowRight size={12} />
+                                <ArrowRight size={18} /> 先に進む
                             </button>
                         </div>
-
-                        {/* 一段目：ライフ回復 */}
-                        <div className="flex items-center gap-2 px-4 pb-2 border-b border-slate-700">
-                            <div className={`flex-1 p-2 rounded border-2 flex items-center gap-2 ${
-                                hasBoughtLife
-                                    ? 'opacity-50 border-slate-700'
-                                    : 'border-red-500/50 bg-red-950/30'
-                            }`}>
-                                <Heart className={`w-6 h-6 text-red-500 shrink-0 ${hasBoughtLife ? 'grayscale' : 'animate-pulse'}`} />
-                                <div className="flex-1 min-w-0">
-                                    <h3 className="font-bold text-slate-100 text-[8px] leading-tight uppercase tracking-wide">Life +1</h3>
-                                    <p className="text-[7px] text-slate-400 leading-snug">ライフを1回復</p>
-                                </div>
-                            </div>
-                            {hasBoughtLife ? (
-                                <span className="text-[8px] text-green-500 font-bold px-2 shrink-0">SOLD</span>
-                            ) : (
-                                <button
-                                    onClick={handleBuyLife}
-                                    disabled={gold < LIFE_RECOVERY_PRICE || life >= maxLife}
-                                    className={`flex items-center gap-1 px-3 py-2 rounded-lg text-[8px] font-black shrink-0 transition-all ${
-                                        gold >= LIFE_RECOVERY_PRICE && life < maxLife
-                                            ? 'bg-yellow-600 hover:bg-yellow-500 text-white'
-                                            : 'bg-slate-800 text-slate-500 cursor-not-allowed'
-                                    }`}
-                                >
-                                    <Coins size={12} /> {LIFE_RECOVERY_PRICE}G
-                                </button>
-                            )}
-                        </div>
-
-                        {/* 二段目：アビリティ（3つ） */}
-                        <div className="flex flex-col gap-1 px-4 py-2 border-b border-slate-700">
-                          {shopPassives.map((passive) => {
-                            const isPurchased = purchasedPassiveIds.has(passive.id);
-                            const price = getPassivePrice(passive.rarity);
-                            const canAfford = gold >= price;
-                            return (
-                              <div key={passive.id} className="flex items-center gap-2">
-                                <div className={`flex-1 p-2 rounded border-2 flex items-center gap-2 ${
-                                    isPurchased
-                                        ? 'opacity-50 border-slate-700'
-                                        : getRarityColor(passive.rarity)
-                                }`}>
-                                    <SafeImage src={passive.icon} alt={passive.name} className={`w-6 h-6 object-contain shrink-0 ${isPurchased ? 'grayscale' : ''}`} />
-                                    <div className="flex-1 min-w-0">
-                                        <div className="flex items-center gap-1">
-                                            <h3 className="font-bold text-slate-100 text-[8px] leading-tight uppercase tracking-wide truncate">{passive.name}</h3>
-                                            <span className={`text-[7px] font-black shrink-0 ${passive.rarity === 'SSR' ? 'text-yellow-500' : passive.rarity === 'R' ? 'text-slate-300' : 'text-orange-500'}`}>{passive.rarity}</span>
-                                        </div>
-                                        <p className="text-[7px] text-slate-400 leading-snug truncate">{passive.description}</p>
-                                    </div>
-                                </div>
-                                {isPurchased ? (
-                                    <span className="text-[8px] text-green-500 font-bold px-2 shrink-0">SOLD</span>
-                                ) : (
-                                    <button
-                                        onClick={() => handleBuyPassive(passive)}
-                                        disabled={!canAfford}
-                                        className={`flex items-center gap-1 px-3 py-2 rounded-lg text-[8px] font-black shrink-0 transition-all ${
-                                            canAfford
-                                                ? 'bg-indigo-600 hover:bg-indigo-500 text-white'
-                                                : 'bg-slate-800 text-slate-500 cursor-not-allowed'
-                                        }`}
-                                    >
-                                        <Coins size={12} /> {price}G
-                                    </button>
-                                )}
-                              </div>
-                            );
-                          })}
-                        </div>
-
-                        {/* 三段目：カード */}
-                        <div className="grid grid-cols-3 gap-2 w-full px-2">
-                            {shopCards.map((card) => {
-                                const isPurchased = purchasedIds.has(card.id);
-                                const price = getCardPrice(card.rarity);
-                                const canAfford = gold >= price;
-                                const ownedCount = permanentDeck.filter(d => d.name === card.name).length;
-
-                                return (
-                                    <div key={card.id} className="relative flex flex-col items-center pb-1">
-                                        <div className="h-[180px]">
-                                          <div className="transform scale-[0.8] origin-top">
-                                            <Card skill={card} onClick={() => {}} disabled={false} mana={999} currentHaste={999} heroStats={heroStats} />
-                                          </div>
-                                        </div>
-                                        {/* 所持数（購入ボタンの上） */}
-                                        {ownedCount > 0 && (
-                                            <div className="text-slate-400 text-[7px] font-black">
-                                                所持:{ownedCount}
-                                            </div>
-                                        )}
-                                        {isPurchased ? (
-                                            <div className="bg-green-600 text-white text-[8px] font-black px-2 py-0.5 rounded-full shadow-lg flex items-center gap-1">
-                                                <Check size={8} /> SOLD
-                                            </div>
-                                        ) : (
-                                            <button
-                                                onClick={() => handleBuyCard(card)}
-                                                disabled={!canAfford}
-                                                className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-[8px] font-black shadow-xl transition-all ${canAfford ? 'bg-indigo-600 hover:bg-indigo-500 text-white' : 'bg-slate-800 text-slate-500 cursor-not-allowed'}`}
-                                            >
-                                                <Coins size={8} /> {price}G
-                                            </button>
-                                        )}
-                                    </div>
-                                );
-                            })}
-                        </div>
-
                     </div>
                 )}
             </div>
@@ -1641,42 +1868,60 @@ const App: React.FC = () => {
                 </div>
             )}
             {gameState === 'BOSS_VICTORY' && (
-                <div className="w-full flex flex-col items-center flex-1 justify-center py-2 animate-in slide-in-from-bottom-10">
-                    <Award size={20} className="text-indigo-400 mb-1" />
-                    <h2 className="text-base font-fantasy font-black text-white tracking-[0.1em] mb-3 uppercase">Ability Upgrade</h2>
-                    <div className="flex flex-col gap-1.5 w-full max-h-[160px] overflow-y-auto no-scrollbar">
-                        {shopOptions.map(option => (
-                            <button key={option.id} onClick={() => selectPassive(option)} className={`w-full bg-slate-900/80 p-2 rounded border-2 hover:brightness-125 transition-all text-left flex items-center gap-2 group ${getRarityColor(option.rarity)}`}>
-                                <SafeImage src={option.icon} alt={option.name} className="w-8 h-8 object-contain shrink-0" />
-                                <div className="flex-1">
-                                    <div className="flex justify-between items-center">
-                                       <h3 className="font-bold text-slate-100 text-[9px] leading-tight uppercase tracking-widest">{option.name}</h3>
-                                       <span className={`text-[7px] font-black px-1 rounded ${option.rarity === 'SSR' ? 'text-yellow-500' : option.rarity === 'R' ? 'text-slate-300' : 'text-orange-500'}`}>{option.rarity}</span>
-                                    </div>
-                                    <p className="text-[7px] text-slate-400 leading-snug mt-0.5">{option.description}</p>
-                                </div>
-                                <ArrowRight className="text-slate-700 group-hover:text-indigo-500" size={12} />
-                            </button>
-                        ))}
-                    </div>
+                <div className="flex flex-col flex-1 gap-2">
+                    {/* ステータスパネル（バトル中と同じ） */}
+                    <PlayerStatusPanel
+                        life={life}
+                        maxLife={maxLife}
+                        currentHaste={maxHaste}
+                        maxHaste={maxHaste}
+                        mana={mana}
+                        maxMana={maxMana}
+                        gold={gold}
+                        heroStats={heroStats}
+                        showHasteGauge={true}
+                        showManaGauge={true}
+                        showGold={true}
+                        showDeckButton={false}
+                    />
                 </div>
             )}
             {gameState === 'CARD_REWARD' && (
-                <div className="w-full flex flex-col items-center flex-1 justify-center py-2 animate-in slide-in-from-bottom-10">
-                    <div className="flex items-center gap-2 mb-3"><PlusCircle size={20} className="text-green-400" /><h2 className="text-base font-fantasy font-black text-white tracking-[0.1em] uppercase">Choose a Reward</h2></div>
-                    <div className="flex justify-center gap-1.5 md:gap-3 w-full mb-4">
-                        {cardRewards.map((reward, i) => <div key={reward.id} className="min-w-[85px] md:min-w-[100px] flex-1 card-entry" style={{ animationDelay: `${i * 0.1}s` }}><Card skill={reward} onClick={() => selectRewardCard(reward)} disabled={false} mana={999} currentHaste={999} heroStats={heroStats} /></div>)}
-                    </div>
-                    <button onClick={() => handleBattleWinFinish(permanentDeck)} className="text-[10px] text-slate-500 hover:text-white transition-colors underline uppercase tracking-widest">Skip and Continue</button>
+                <div className="flex flex-col flex-1 gap-2">
+                    {/* ステータスパネル（バトル中と同じ） */}
+                    <PlayerStatusPanel
+                        life={life}
+                        maxLife={maxLife}
+                        currentHaste={maxHaste}
+                        maxHaste={maxHaste}
+                        mana={mana}
+                        maxMana={maxMana}
+                        gold={gold}
+                        heroStats={heroStats}
+                        showHasteGauge={true}
+                        showManaGauge={true}
+                        showGold={true}
+                        showDeckButton={false}
+                    />
                 </div>
             )}
             {gameState === 'SHOP' && (
-                <div className="flex flex-col items-center justify-center flex-1 gap-2 p-4 bg-yellow-950/10 rounded-xl border border-yellow-800/20">
-                    <div className="flex items-center gap-2">
-                        <ShoppingCart className="text-yellow-500" size={24} />
-                        <h2 className="text-xl font-fantasy font-bold text-yellow-400 tracking-widest">SHOPPING</h2>
-                    </div>
-                    <p className="text-[10px] text-slate-500 uppercase tracking-widest">ゴールドを使い、さらなる力を手に入れよ</p>
+                <div className="flex flex-col flex-1 gap-2">
+                    {/* ステータスパネル（バトル中と同じ） */}
+                    <PlayerStatusPanel
+                        life={life}
+                        maxLife={maxLife}
+                        currentHaste={maxHaste}
+                        maxHaste={maxHaste}
+                        mana={mana}
+                        maxMana={maxMana}
+                        gold={gold}
+                        heroStats={heroStats}
+                        showHasteGauge={true}
+                        showManaGauge={true}
+                        showGold={true}
+                        showDeckButton={false}
+                    />
                 </div>
             )}
             {gameState === 'GAME_OVER' && (
