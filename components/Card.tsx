@@ -47,7 +47,7 @@ export const Card: React.FC<CardProps> = ({
       className={`
         relative group
         flex flex-col items-center justify-start
-        w-full h-[14rem]
+        w-28 h-[14rem]
         bg-slate-900 border-2 rounded-lg
         ${canAfford ? 'border-slate-700' : 'border-red-900'}
         shadow-2xl
@@ -58,35 +58,36 @@ export const Card: React.FC<CardProps> = ({
         overflow-hidden
       `}
     >
-      {/* ヘッダーライン: ヘイスト | カードタイプ | マナ */}
+      {/* ヘッダーライン: ヘイスト | マナ */}
       <div className={`
         w-full flex items-center justify-between px-2 py-1 border-b z-20
         ${skill.cardType === 'support' ? 'bg-teal-900/50 border-teal-700' : 'bg-slate-800 border-slate-700'}
       `}>
         {/* ヘイスト（DELAY） */}
-        <div className="flex items-center gap-0.5">
-          <Zap className="w-3 h-3 text-slate-300" />
-          <span className="text-[0.5rem] font-black text-slate-300">{skill.delay}</span>
+        <div className={`flex items-center gap-1 px-1.5 py-0.5 rounded ${
+          skill.delay > 0
+            ? 'bg-white text-slate-900'
+            : 'text-slate-400'
+        }`}>
+          <Zap className="w-4 h-4" />
+          <span className="text-[0.65rem] font-black">{skill.delay}</span>
         </div>
 
-        {/* カードタイプ */}
-        <span className={`text-[0.4rem] font-black px-1.5 py-0.5 rounded ${
-          skill.cardType === 'support'
-            ? 'bg-teal-600 text-white'
-            : 'bg-orange-600 text-white'
-        }`}>
-          {skill.cardType === 'support' ? 'サポート' : 'アタック'}
-        </span>
-
         {/* マナ */}
-        <div className={`flex items-center gap-0.5 ${canAfford ? 'text-blue-400' : 'text-red-400'}`}>
-          <Hexagon className="w-3 h-3" />
-          <span className="text-[0.5rem] font-black">{skill.manaCost}</span>
+        <div className={`flex items-center gap-1 px-1.5 py-0.5 rounded ${
+          skill.manaCost > 0
+            ? canAfford
+              ? 'bg-blue-500 text-white'
+              : 'bg-red-500 text-white'
+            : 'text-slate-400'
+        }`}>
+          <Hexagon className="w-4 h-4" />
+          <span className="text-[0.65rem] font-black">{skill.manaCost}</span>
         </div>
       </div>
 
       {/* アイコン */}
-      <div className="w-14 h-14 mt-2 flex items-center justify-center group-hover:scale-125 transition-transform duration-300 z-10">
+      <div className="w-12 h-12 mt-2 flex items-center justify-center group-hover:scale-125 transition-transform duration-300 z-10">
           <img
               src={imgSrc}
               alt={skill.name}
@@ -104,36 +105,57 @@ export const Card: React.FC<CardProps> = ({
       </div>
 
       {/* ダメージと係数表記 */}
-      <div className="flex flex-col items-center gap-0.5 mt-1 z-10">
+      <div className="flex flex-col items-center gap-0.5 mt-0.5 z-10">
         {hasPhysicalDamage && (
-          <div className="flex items-center gap-1">
-            <Swords className={`w-3 h-3 ${isPhysicalDown ? 'text-red-400' : 'text-orange-400'}`} />
-            <span className={`text-[0.6rem] font-black ${isPhysicalUp ? 'text-green-300' : isPhysicalDown ? 'text-red-300' : 'text-orange-300'}`}>
-              {physicalDamage}
-            </span>
-            <span className="text-[0.45rem] text-orange-400/70">(AD×{skill.adRatio}%)</span>
-            {isPhysicalUp && <span className="text-[0.4rem] text-green-300">↑</span>}
-            {isPhysicalDown && <span className="text-[0.4rem] text-red-300">↓</span>}
+          <div className={`flex flex-col items-center px-2 py-0.5 rounded leading-tight ${isPhysicalDown ? 'bg-red-600' : 'bg-orange-600'}`}>
+            <div className="flex items-center gap-1">
+              <Swords className="w-3 h-3 text-white" />
+              <span className="text-[0.75rem] font-black text-white">
+                {physicalDamage}
+              </span>
+              <span className="text-[0.5rem] font-bold text-white">ダメージ</span>
+              {isPhysicalUp && <span className="text-[0.5rem] text-green-300 font-black">↑</span>}
+              {isPhysicalDown && <span className="text-[0.5rem] text-white font-black">↓</span>}
+            </div>
+            <span className="text-[0.5rem] font-bold text-white/70 leading-none">(AD×{skill.adRatio}%)</span>
           </div>
         )}
         {hasMagicDamage && (
-          <div className="flex items-center gap-1">
-            <Wand2 className={`w-3 h-3 ${isMagicDown ? 'text-red-400' : 'text-indigo-400'}`} />
-            <span className={`text-[0.6rem] font-black ${isMagicUp ? 'text-green-300' : isMagicDown ? 'text-red-300' : 'text-indigo-300'}`}>
-              {magicDamage}
-            </span>
-            <span className="text-[0.45rem] text-indigo-400/70">(AP×{skill.apRatio}%)</span>
-            {isMagicUp && <span className="text-[0.4rem] text-green-300">↑</span>}
-            {isMagicDown && <span className="text-[0.4rem] text-red-300">↓</span>}
+          <div className={`flex flex-col items-center px-2 py-0.5 rounded leading-tight ${isMagicDown ? 'bg-red-600' : 'bg-indigo-600'}`}>
+            <div className="flex items-center gap-1">
+              <Wand2 className="w-3 h-3 text-white" />
+              <span className="text-[0.75rem] font-black text-white">
+                {magicDamage}
+              </span>
+              <span className="text-[0.5rem] font-bold text-white">ダメージ</span>
+              {isMagicUp && <span className="text-[0.5rem] text-green-300 font-black">↑</span>}
+              {isMagicDown && <span className="text-[0.5rem] text-white font-black">↓</span>}
+            </div>
+            <span className="text-[0.5rem] font-bold text-white/70 leading-none">(AP×{skill.apRatio}%)</span>
           </div>
         )}
         {!hasDamage && (
-          <span className="text-[0.5rem] text-slate-500">ダメージなし</span>
+          <div className="flex flex-col items-center px-2 py-0.5 rounded border border-slate-600 bg-transparent leading-tight">
+            <div className="flex items-center gap-1">
+              <span className="text-[0.75rem] font-black text-slate-500">-</span>
+              <span className="text-[0.5rem] font-bold text-slate-500">ダメージなし</span>
+            </div>
+            <span className="text-[0.5rem] text-slate-600 leading-none">-</span>
+          </div>
         )}
       </div>
 
+      {/* カードタイプ */}
+      <span className={`text-[0.5rem] font-black leading-none mt-0.5 py-0.5 z-10 ${
+        skill.cardType === 'support'
+          ? 'text-teal-400'
+          : 'text-orange-400'
+      }`}>
+        {skill.cardType === 'support' ? 'サポート' : 'アタック'}
+      </span>
+
       {/* Effect Description */}
-      <div className={`w-full flex-1 rounded-b p-2 border-t flex items-start justify-center mt-1 ${effectsDisabled ? 'bg-slate-950 border-slate-800' : 'bg-slate-800/50 border-slate-700'}`}>
+      <div className={`w-full flex-1 rounded-b px-2 py-1 border-t flex items-start justify-center mt-0.5 ${effectsDisabled ? 'bg-slate-950 border-slate-800' : 'bg-slate-800/50 border-slate-700'}`}>
           <p className={`text-[0.55rem] text-center leading-relaxed font-medium ${effectsDisabled ? 'text-slate-600 line-through' : 'text-slate-300'}`}>
               {skill.effect ? skill.effect.description : "通常技"}
           </p>

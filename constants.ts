@@ -5,7 +5,7 @@ export const INITIAL_LIFE = 2;
 
 // 主人公の初期パラメータ
 export const INITIAL_HERO_STATS: HeroStats = {
-  ad: 10,  // 物理攻撃力
+  ad: 30,  // 物理攻撃力
   ap: 10,  // 魔法攻撃力
   sp: 30,  // ヘイスト（行動力の最大値）
   mp: 50,  // マナ（INITIAL_MANAと同じ）

@@ -405,8 +405,9 @@ const App: React.FC = () => {
   };
 
   const handleEnemyAttack = (currentStack: Skill[], currentDeck: Skill[]) => {
+    // 即座にフラグを設定して連打を防止
+    setIsMonsterAttacking(true);
     setTimeout(() => {
-      setIsMonsterAttacking(true);
       setTimeout(() => {
         setIsMonsterAttacking(false);
         setIsPlayerTakingDamage(true);
@@ -530,6 +531,13 @@ const App: React.FC = () => {
               setTimeout(() => setFloatingDamages(p => p.filter(d => d.id !== mhId)), 1000);
            }
            if (skill.effect.type === 'poison') setIsEnemyPoisoned(true);
+           if (skill.effect.type === 'mana_recovery') {
+              const recoveryAmount = skill.effect.params.value || 30;
+              setMana(prev => Math.min(maxMana, prev + recoveryAmount));
+              const mhId = generateId();
+              setFloatingDamages(prev => [...prev, { id: mhId, value: recoveryAmount, isMana: true }]);
+              setTimeout(() => setFloatingDamages(p => p.filter(d => d.id !== mhId)), 1000);
+           }
            if (skill.effect.type === 'add_buff' && skill.effect.params.buffId) {
              addBuff(skill.effect.params.buffId, skill.effect.params.value);
            }
@@ -630,7 +638,7 @@ const App: React.FC = () => {
           100% { transform: scale(1) translateY(0); opacity: 1; }
         }
         .card-entry { animation: cardEntry 0.4s ease-out forwards; }
-        .deck-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(80px, 1fr)); gap: 12px; }
+        .deck-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px 8px; justify-items: center; }
         @keyframes redFlash { 0% { opacity: 0; } 20% { opacity: 0.6; } 100% { opacity: 0; } }
         .damage-flash { animation: redFlash 0.5s ease-out forwards; }
       `}</style>
@@ -639,8 +647,8 @@ const App: React.FC = () => {
 
       {/* DECK OVERLAY */}
       {isDeckOverlayOpen && (
-        <div className="fixed inset-0 z-[100] bg-slate-950/90 backdrop-blur-md p-6 flex flex-col animate-in fade-in duration-300">
-          <div className="w-full max-w-2xl mx-auto flex flex-col h-full">
+        <div className="fixed inset-0 z-[100] bg-slate-950/90 backdrop-blur-md p-4 flex flex-col animate-in fade-in duration-300">
+          <div className="w-full max-w-sm md:max-w-md lg:max-w-lg mx-auto flex flex-col h-full">
             <div className="flex justify-between items-center mb-6 pb-4 border-b border-slate-800">
               <div className="flex items-center gap-3">
                 <Layers className="text-indigo-400" size={24} />
@@ -654,15 +662,15 @@ const App: React.FC = () => {
                 {permanentDeck.map((skill, idx) => {
                   const isAvailable = deck.some(d => d.id === skill.id) || hand.some(h => h.id === skill.id);
                   return (
-                    <div key={`${skill.id}-${idx}`} className={`bg-slate-900 border rounded-lg p-2 flex flex-col items-center group transition-all duration-300 relative ${isAvailable ? 'border-slate-800 hover:border-indigo-500' : 'border-slate-900 opacity-30 grayscale'}`}>
-                      <SafeImage src={skill.icon} alt={skill.name} className="w-10 h-10 object-contain mb-2 group-hover:scale-110 transition-transform" />
-                      <span className="text-[9px] font-bold text-slate-300 text-center uppercase tracking-tighter leading-tight line-clamp-1">{skill.name}</span>
-                      <div className="mt-1 flex items-center gap-1">
-                        {skill.adRatio > 0 && <span className="text-[7px] font-black text-orange-400">{Math.floor(heroStats.ad * skill.adRatio / 100)}</span>}
-                        {skill.apRatio > 0 && <span className="text-[7px] font-black text-indigo-400">{Math.floor(heroStats.ap * skill.apRatio / 100)}</span>}
-                        <span className="text-[7px] font-black text-blue-400">-{skill.manaCost}M</span>
+                    <div key={`${skill.id}-${idx}`} className={`relative transition-all duration-300 h-[145px] md:h-[180px] lg:h-[210px] ${!isAvailable ? 'opacity-40 grayscale' : ''}`}>
+                      <div className="transform scale-[0.65] md:scale-[0.8] lg:scale-[0.95] origin-top">
+                        <Card skill={skill} onClick={() => {}} disabled={false} mana={999} heroStats={heroStats} />
                       </div>
-                      {!isAvailable && <div className="absolute bottom-1 right-1 px-1 bg-red-900/80 rounded text-[6px] font-black text-white uppercase tracking-tighter">Used</div>}
+                      {!isAvailable && (
+                        <div className="absolute top-1 right-1 px-1.5 py-0.5 bg-red-900/90 rounded text-[8px] font-black text-white uppercase tracking-wider shadow-lg">
+                          Used
+                        </div>
+                      )}
                     </div>
                   );
                 })}
@@ -751,37 +759,28 @@ const App: React.FC = () => {
                             </div>
                         </div>
 
-                        {/* 主人公パラメータ表示 */}
-                        <div className="absolute bottom-1 left-1 md:bottom-2 md:left-2 z-40 animate-in fade-in slide-in-from-left-4">
-                          <div className="bg-slate-900/90 backdrop-blur-md shadow-xl rounded border border-slate-800 px-2 py-1.5">
-                            <div className="grid grid-cols-2 gap-x-3 gap-y-0.5">
-                              <div className="flex items-center gap-1">
-                                <Swords className="w-[0.625rem] h-[0.625rem] text-red-400" />
-                                <span className="text-[0.5rem] font-black text-slate-400">AD</span>
-                                <span className="text-[0.625rem] font-black text-red-400">{heroStats.ad}</span>
-                              </div>
-                              <div className="flex items-center gap-1">
-                                <Sparkles className="w-[0.625rem] h-[0.625rem] text-purple-400" />
-                                <span className="text-[0.5rem] font-black text-slate-400">AP</span>
-                                <span className="text-[0.625rem] font-black text-purple-400">{heroStats.ap}</span>
-                              </div>
-                              <div className="flex items-center gap-1">
-                                <Zap className="w-[0.625rem] h-[0.625rem] text-yellow-400" />
-                                <span className="text-[0.5rem] font-black text-slate-400">SP</span>
-                                <span className="text-[0.625rem] font-black text-yellow-400">{heroStats.sp}</span>
-                              </div>
-                              <div className="flex items-center gap-1">
-                                <Hexagon className="w-[0.625rem] h-[0.625rem] text-blue-400" />
-                                <span className="text-[0.5rem] font-black text-slate-400">MP</span>
-                                <span className="text-[0.625rem] font-black text-blue-400">{heroStats.mp}</span>
-                              </div>
-                            </div>
-                          </div>
+                        {/* デッキビュワーボタン */}
+                        <div className="absolute bottom-1 left-1 md:bottom-2 md:left-2 z-40">
+                          <button onClick={() => setIsDeckOverlayOpen(true)} className="flex items-center gap-1.5 px-2 py-1 bg-slate-900/90 backdrop-blur-md border border-indigo-500/40 rounded-lg text-[9px] font-black text-indigo-300 uppercase tracking-widest hover:bg-slate-800 transition-all shadow-xl">
+                            <Search size={12} />
+                            <span>DECK</span>
+                          </button>
                         </div>
 
                         <div className={`w-32 h-32 md:w-52 md:h-52 select-none pointer-events-none drop-shadow-[0_10px_30px_rgba(0,0,0,0.5)] flex items-center justify-center ${isMonsterShaking ? 'monster-shake brightness-150 scale-110' : ''} ${isMonsterAttacking ? 'monster-attack z-50' : 'monster-idle'}`}>
                             <SafeImage src={currentEnemy.icon} alt={currentEnemy.name} className="w-full h-full object-contain" />
                         </div>
+
+                        {/* 敵のtrait表示 */}
+                        {battleEvent.title && (
+                          <div className={`mt-2 px-3 py-1 rounded-lg border ${battleEvent.type === 'positive' ? 'bg-green-900/50 border-green-600' : 'bg-red-900/50 border-red-600'} z-20`}>
+                            <div className="flex items-center gap-2">
+                              <Zap size={12} className={battleEvent.type === 'positive' ? 'text-green-400' : 'text-red-400'} />
+                              <span className="text-[9px] font-black text-white uppercase tracking-wider">{battleEvent.title}</span>
+                            </div>
+                            <p className="text-[7px] text-slate-300 mt-0.5">{battleEvent.description}</p>
+                          </div>
+                        )}
 
                         {floatingDamages.map(dmg => (
                           <div key={dmg.id} className={`absolute z-50 pointer-events-none damage-pop font-black drop-shadow-[0_0_10px_rgba(0,0,0,0.5)] font-fantasy ${dmg.isMana ? 'text-blue-400 text-xl' : dmg.isPoison ? 'text-green-500 text-lg' : 'text-red-500 text-2xl'}`} style={{ top: '45%' }}>{dmg.isMana ? `+${dmg.value}` : `-${dmg.value}`}</div>
@@ -793,48 +792,78 @@ const App: React.FC = () => {
                 {gameState === 'SHOP' && (
                     <div className="flex flex-col items-center w-full animate-in zoom-in duration-500 pt-2 overflow-y-auto no-scrollbar max-h-[500px]">
                         <ShoppingCart className="text-yellow-500 mb-1 opacity-30" size={32} />
-                        <h2 className="text-lg font-fantasy font-black text-yellow-400 tracking-[0.15em] uppercase mb-3 text-shadow-lg">Shop</h2>
+                        <h2 className="text-lg font-fantasy font-black text-yellow-400 tracking-[0.15em] uppercase mb-2 text-shadow-lg">Shop</h2>
 
-                        {/* 一段目：ライフとアビリティ */}
-                        <div className="flex justify-center gap-3 w-full px-4 mb-3">
-                            {/* Recover Life Option */}
-                            <div className="bg-slate-900/60 border-2 border-slate-800 rounded-xl p-2 flex flex-col items-center justify-between group hover:border-red-500/50 transition-all w-[100px]">
-                                <Heart className={`text-red-500 ${hasBoughtLife ? 'grayscale opacity-30' : 'animate-pulse'}`} size={28} />
-                                <span className="block text-[8px] font-black text-white uppercase mt-1">Life +1</span>
+                        {/* ボタン群 */}
+                        <div className="flex items-center gap-3 mb-3">
+                            <button
+                                onClick={() => setIsDeckOverlayOpen(true)}
+                                className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-900 border border-indigo-500/40 rounded-lg text-[9px] font-black text-indigo-300 uppercase tracking-widest hover:bg-slate-800 transition-all"
+                            >
+                                <Search size={10} /> DECK
+                            </button>
+                            <button
+                                onClick={() => nextLevel()}
+                                className="bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white px-6 py-1.5 rounded-full text-[10px] font-black tracking-[0.15em] uppercase border border-slate-700 transition-all flex items-center gap-2"
+                            >
+                                Continue <ArrowRight size={12} />
+                            </button>
+                        </div>
+
+                        {/* 一段目：ライフ回復 */}
+                        <div className="flex justify-center w-full px-4 mb-2">
+                            <div className={`bg-slate-900/60 border-2 rounded-xl p-2 flex items-center gap-3 group transition-all ${hasBoughtLife ? 'border-slate-800 opacity-50' : 'border-red-500/50 hover:border-red-400'}`}>
+                                <Heart className={`text-red-500 ${hasBoughtLife ? 'grayscale' : 'animate-pulse'}`} size={24} />
+                                <div className="flex flex-col">
+                                    <span className="text-[9px] font-black text-white uppercase">Life +1</span>
+                                    <span className="text-[7px] text-slate-400">ライフを1回復</span>
+                                </div>
                                 {hasBoughtLife ? (
-                                    <span className="block text-[8px] text-green-500 font-bold mt-1">SOLD OUT</span>
+                                    <span className="text-[8px] text-green-500 font-bold px-2">SOLD OUT</span>
                                 ) : (
                                     <button
                                         onClick={handleBuyLife}
                                         disabled={gold < LIFE_RECOVERY_PRICE || life >= maxLife}
-                                        className={`mt-1 flex items-center gap-1 px-2 py-0.5 rounded-full text-[8px] font-black transition-all ${gold >= LIFE_RECOVERY_PRICE && life < maxLife ? 'bg-yellow-600 hover:bg-yellow-500 text-white shadow-lg' : 'bg-slate-800 text-slate-500 cursor-not-allowed'}`}
+                                        className={`flex items-center gap-1 px-3 py-1 rounded-full text-[8px] font-black transition-all ${gold >= LIFE_RECOVERY_PRICE && life < maxLife ? 'bg-yellow-600 hover:bg-yellow-500 text-white shadow-lg' : 'bg-slate-800 text-slate-500 cursor-not-allowed'}`}
                                     >
-                                        <Coins size={8} /> {LIFE_RECOVERY_PRICE}G
+                                        <Coins size={10} /> {LIFE_RECOVERY_PRICE}G
                                     </button>
                                 )}
                             </div>
-
-                            {/* Ability Option */}
-                            {shopPassive && (
-                                <div className={`bg-slate-900/60 border-2 rounded-xl p-2 flex flex-col items-center justify-between group hover:brightness-125 transition-all w-[100px] ${getRarityColor(shopPassive.rarity)}`}>
-                                    <SafeImage src={shopPassive.icon} alt={shopPassive.name} className={`w-7 h-7 object-contain ${hasBoughtPassive ? 'grayscale opacity-30' : ''}`} />
-                                    <span className="text-[7px] font-black text-white uppercase text-center leading-tight line-clamp-1 mt-1">{shopPassive.name}</span>
-                                    {hasBoughtPassive ? (
-                                        <span className="block text-[8px] text-green-500 font-bold mt-1">SOLD OUT</span>
-                                    ) : (
-                                        <button
-                                            onClick={handleBuyPassive}
-                                            disabled={gold < getPassivePrice(shopPassive.rarity)}
-                                            className={`mt-1 flex items-center gap-1 px-2 py-0.5 rounded-full text-[8px] font-black transition-all ${gold >= getPassivePrice(shopPassive.rarity) ? 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-lg' : 'bg-slate-800 text-slate-500 cursor-not-allowed'}`}
-                                        >
-                                            <Coins size={8} /> {getPassivePrice(shopPassive.rarity)}G
-                                        </button>
-                                    )}
-                                </div>
-                            )}
                         </div>
 
-                        {/* 二段目以降：カード（3枚ずつ） */}
+                        {/* 二段目：アビリティ（横長ボタン形式） */}
+                        {shopPassive && (
+                            <div className="w-full px-4 mb-3">
+                                <button
+                                    onClick={handleBuyPassive}
+                                    disabled={hasBoughtPassive || gold < getPassivePrice(shopPassive.rarity)}
+                                    className={`w-full p-2 rounded border-2 transition-all text-left flex items-center gap-2 group ${
+                                        hasBoughtPassive
+                                            ? 'opacity-50 cursor-not-allowed border-slate-700'
+                                            : `hover:brightness-125 ${getRarityColor(shopPassive.rarity)}`
+                                    }`}
+                                >
+                                    <SafeImage src={shopPassive.icon} alt={shopPassive.name} className={`w-8 h-8 object-contain shrink-0 ${hasBoughtPassive ? 'grayscale' : ''}`} />
+                                    <div className="flex-1">
+                                        <div className="flex justify-between items-center">
+                                            <h3 className="font-bold text-slate-100 text-[9px] leading-tight uppercase tracking-widest">{shopPassive.name}</h3>
+                                            <span className={`text-[7px] font-black px-1 rounded ${shopPassive.rarity === 'SSR' ? 'text-yellow-500' : shopPassive.rarity === 'R' ? 'text-slate-300' : 'text-orange-500'}`}>{shopPassive.rarity}</span>
+                                        </div>
+                                        <p className="text-[7px] text-slate-400 leading-snug mt-0.5">{shopPassive.description}</p>
+                                    </div>
+                                    {hasBoughtPassive ? (
+                                        <span className="text-[8px] text-green-500 font-bold px-2">SOLD</span>
+                                    ) : (
+                                        <div className="flex items-center gap-1 px-2 py-1 rounded-full bg-indigo-600 text-white text-[8px] font-black">
+                                            <Coins size={10} /> {getPassivePrice(shopPassive.rarity)}G
+                                        </div>
+                                    )}
+                                </button>
+                            </div>
+                        )}
+
+                        {/* 三段目：カード */}
                         <div className="grid grid-cols-3 gap-2 w-full px-2">
                             {shopCards.map((card) => {
                                 const isPurchased = purchasedIds.has(card.id);
@@ -843,13 +872,15 @@ const App: React.FC = () => {
                                 const ownedCount = permanentDeck.filter(d => d.name === card.name).length;
 
                                 return (
-                                    <div key={card.id} className="relative flex flex-col items-center pb-2">
-                                        <div className="transform scale-[0.8] origin-top">
+                                    <div key={card.id} className="relative flex flex-col items-center pb-1">
+                                        <div className="h-[180px]">
+                                          <div className="transform scale-[0.8] origin-top">
                                             <Card skill={card} onClick={() => {}} disabled={false} mana={999} heroStats={heroStats} />
+                                          </div>
                                         </div>
                                         {/* 所持数（購入ボタンの上） */}
                                         {ownedCount > 0 && (
-                                            <div className="text-slate-400 text-[7px] font-black mb-0.5">
+                                            <div className="text-slate-400 text-[7px] font-black">
                                                 所持:{ownedCount}
                                             </div>
                                         )}
@@ -871,21 +902,6 @@ const App: React.FC = () => {
                             })}
                         </div>
 
-                        {/* ボタン群 */}
-                        <div className="flex items-center gap-3 mt-2 mb-4">
-                            <button
-                                onClick={() => setIsDeckOverlayOpen(true)}
-                                className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-900 border border-indigo-500/40 rounded-lg text-[9px] font-black text-indigo-300 uppercase tracking-widest hover:bg-slate-800 transition-all"
-                            >
-                                <Search size={10} /> DECK
-                            </button>
-                            <button
-                                onClick={() => nextLevel()}
-                                className="bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white px-6 py-1.5 rounded-full text-[10px] font-black tracking-[0.15em] uppercase border border-slate-700 transition-all flex items-center gap-2"
-                            >
-                                Continue <ArrowRight size={12} />
-                            </button>
-                        </div>
                     </div>
                 )}
             </div>
@@ -899,20 +915,12 @@ const App: React.FC = () => {
                 </div>
             )}
             {gameState === 'PLAYING' && (
-                <div className="flex flex-col gap-4 flex-1">
-                    <div className={`flex items-start gap-2 p-2 rounded-lg border-l-4 bg-slate-800/50 ${battleEvent.type === 'positive' ? 'border-green-500' : 'border-red-500'}`}>
-                        <Zap size={14} className={`mt-0.5 shrink-0 ${battleEvent.type === 'positive' ? 'text-green-400' : 'text-red-400'}`} />
-                        <div className="flex flex-col">
-                            <p className="text-[10px] md:text-xs font-bold text-slate-100 leading-tight">{battleEvent.title}</p>
-                            <p className="text-[9px] text-slate-400 leading-tight mt-0.5">{battleEvent.description}</p>
-                        </div>
-                    </div>
-
+                <div className="flex flex-col gap-2 flex-1">
                     {/* プレイヤーバフ表示（常に表示・横スクロール対応） */}
-                    <div className="flex items-center gap-2 min-h-[1.5rem] w-full">
+                    <div className="flex items-center gap-2 min-h-[1rem] w-full">
                       <span className="text-[0.5rem] font-black text-slate-500 uppercase shrink-0">BUFFS:</span>
                       <div className="relative flex-1 min-w-0">
-                        <div className="flex items-center gap-2 overflow-x-auto no-scrollbar py-6 -my-6">
+                        <div className="flex items-center gap-2 overflow-x-auto no-scrollbar py-3 -my-3">
                           {playerBuffs.map(buff => (
                             <div
                               key={buff.id}
@@ -969,7 +977,10 @@ const App: React.FC = () => {
 
                         {/* ゲージ行 */}
                         <div className="flex items-center gap-2">
-                          <span className="text-[0.5rem] font-black text-slate-300 w-12">HASTE</span>
+                          <div className="flex items-center gap-1 w-14">
+                            <Zap className="w-4 h-4 text-slate-300" />
+                            <span className="text-[0.5rem] font-black text-slate-300">HASTE</span>
+                          </div>
                           <div className="flex-1 h-6 bg-slate-950 rounded-l border border-slate-700 relative overflow-hidden">
                             {/* 10区切りグリッド */}
                             <div className="absolute inset-0 flex z-10">
@@ -1005,7 +1016,10 @@ const App: React.FC = () => {
 
                       {/* MANAゲージ */}
                       <div className="flex items-center gap-2">
-                        <span className="text-[0.5rem] font-black text-blue-400 w-12">MANA</span>
+                        <div className="flex items-center gap-1 w-14">
+                          <Hexagon className="w-4 h-4 text-blue-400" />
+                          <span className="text-[0.5rem] font-black text-blue-400">MANA</span>
+                        </div>
                         <div className="flex-1 h-6 bg-slate-950 rounded border border-slate-700 relative overflow-hidden">
                           <div
                             className="h-full bg-gradient-to-r from-blue-600 to-blue-400 transition-all duration-300"
@@ -1024,20 +1038,9 @@ const App: React.FC = () => {
                     </div>
 
                     <div className="flex flex-col gap-2 md:gap-4 flex-1">
-                        {isStuckDueToMana ? (
-                           <div className="flex-1 flex flex-col items-center justify-center animate-in fade-in">
-                              <p className="text-red-400 text-[10px] font-black uppercase tracking-widest mb-3">魔力不足！カードを使えません</p>
-                              <button onClick={handleRest} className="flex flex-col items-center gap-2 p-6 bg-slate-800 hover:bg-slate-700 border-2 border-indigo-500/50 rounded-2xl transition-all group active:scale-95 shadow-2xl">
-                                 <Coffee className="text-indigo-400 group-hover:scale-110 transition-transform" size={32} />
-                                 <div className="text-center">
-                                    <span className="block text-xs font-bold text-white uppercase tracking-widest">精神統一</span>
-                                    <span className="block text-[8px] text-indigo-300 mt-1">コンボ1回消費 / 魔力+30</span>
-                                 </div>
-                              </button>
-                           </div>
-                        ) : hand.length > 0 ? (
+                        {hand.length > 0 ? (
                             <div className="flex justify-center gap-1.5 md:gap-3 animate-in slide-in-from-bottom-4 overflow-x-auto pb-1.5 no-scrollbar">
-                                {hand.map((item) => <div key={item.id} className="flex-1 max-w-[30%]"><Card skill={item} onClick={() => selectSkill(item)} disabled={currentHaste <= 0 || isTargetMet || isMonsterAttacking || turnResetMessage} mana={mana} heroStats={heroStats} physicalMultiplier={battleEvent.physicalMultiplier} magicMultiplier={battleEvent.magicMultiplier} effectsDisabled={isEffectDisabled(item)} /></div>)}
+                                {hand.map((item) => <div key={item.id} className="flex-1 max-w-[30%]"><Card skill={item} onClick={() => selectSkill(item)} disabled={isTargetMet || isMonsterAttacking || turnResetMessage} mana={mana} heroStats={heroStats} physicalMultiplier={battleEvent.physicalMultiplier} magicMultiplier={battleEvent.magicMultiplier} effectsDisabled={isEffectDisabled(item)} /></div>)}
                             </div>
                         ) : (
                             <div className="flex-1 flex items-center justify-center text-center p-4">
@@ -1045,7 +1048,48 @@ const App: React.FC = () => {
                             </div>
                         )}
                     </div>
-                    <div className="flex justify-center"><button onClick={() => setIsDeckOverlayOpen(true)} className="flex items-center gap-1.5 px-3 py-1 bg-slate-900 border border-indigo-500/40 rounded-lg text-[9px] font-black text-indigo-300 uppercase tracking-widest"><Search size={10} /><span>DECK VIEWER</span></button></div>
+                    {/* アクションボタン */}
+                    <p className="text-center text-[10px] text-white mt-0.5">マナやヘイストが足りなくなったとき用↓</p>
+                    <div className="flex justify-center gap-2 mt-0.5">
+                      {/* 精神統一ボタン */}
+                      <button
+                        onClick={handleRest}
+                        disabled={currentHaste < 10 || isTargetMet || isMonsterAttacking || turnResetMessage}
+                        className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border-2 transition-all ${
+                          currentHaste >= 10 && !isTargetMet && !isMonsterAttacking && !turnResetMessage
+                            ? 'bg-slate-800 hover:bg-slate-700 border-indigo-500/50 active:scale-95'
+                            : 'bg-slate-900 border-slate-700 opacity-40 cursor-not-allowed'
+                        }`}
+                      >
+                        <Coffee className="text-indigo-400" size={16} />
+                        <span className="text-[9px] font-bold text-white uppercase tracking-wider">精神統一</span>
+                        <div className="flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-white text-slate-900">
+                          <Zap className="w-3 h-3" />
+                          <span className="text-[8px] font-black">10</span>
+                        </div>
+                        <div className="flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-blue-500 text-white">
+                          <Hexagon className="w-3 h-3" />
+                          <span className="text-[8px] font-black">+30</span>
+                        </div>
+                      </button>
+                      {/* ターン終了ボタン */}
+                      <button
+                        onClick={() => handleEnemyAttack(stack, deck)}
+                        disabled={isTargetMet || isMonsterAttacking || turnResetMessage}
+                        className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border-2 transition-all ${
+                          !isTargetMet && !isMonsterAttacking && !turnResetMessage
+                            ? 'bg-red-950 hover:bg-red-900 border-red-500/50 active:scale-95'
+                            : 'bg-slate-900 border-slate-700 opacity-40 cursor-not-allowed'
+                        }`}
+                      >
+                        <Skull className="text-red-400" size={16} />
+                        <span className="text-[9px] font-bold text-white uppercase tracking-wider">ターン終了</span>
+                        <div className="flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-red-500 text-white">
+                          <Heart className="w-3 h-3" />
+                          <span className="text-[8px] font-black">-1</span>
+                        </div>
+                      </button>
+                    </div>
                 </div>
             )}
             {gameState === 'BOSS_VICTORY' && (
