@@ -22,12 +22,24 @@ export const Card: React.FC<CardProps> = ({
     setHasError(false);
   }, [skill.icon]);
 
-  // ダメージ計算（物理/魔法別々に倍率適用）
+  // ダメージ計算（基礎ダメージ + 物理/魔法係数）
+  const baseDamage = skill.baseDamage || 0;
   const physicalDamage = Math.floor(heroStats.ad * skill.adRatio / 100 * physicalMultiplier);
   const magicDamage = Math.floor(heroStats.ap * skill.apRatio / 100 * magicMultiplier);
-  const hasPhysicalDamage = skill.adRatio > 0;
-  const hasMagicDamage = skill.apRatio > 0;
-  const hasDamage = hasPhysicalDamage || hasMagicDamage;
+  const totalDamage = baseDamage + physicalDamage + magicDamage;
+
+  const hasBaseDamage = baseDamage > 0;
+  const hasPhysicalRatio = skill.adRatio > 0;
+  const hasMagicRatio = skill.apRatio > 0;
+  const hasOnlyBaseDamage = hasBaseDamage && !hasPhysicalRatio && !hasMagicRatio;
+  const hasDamage = hasBaseDamage || hasPhysicalRatio || hasMagicRatio;
+
+  // 計算式を生成（例: "基礎70 + 100%AD"）
+  const formulaParts: string[] = [];
+  if (hasBaseDamage) formulaParts.push(`基礎${baseDamage}`);
+  if (hasPhysicalRatio) formulaParts.push(`${skill.adRatio}%AD`);
+  if (hasMagicRatio) formulaParts.push(`${skill.apRatio}%AP`);
+  const formula = formulaParts.join(' + ');
 
   const isPhysicalUp = physicalMultiplier > 1;
   const isPhysicalDown = physicalMultiplier < 1;
@@ -106,32 +118,30 @@ export const Card: React.FC<CardProps> = ({
 
       {/* ダメージと係数表記 */}
       <div className="flex flex-col items-center gap-0.5 mt-0.5 z-10">
-        {hasPhysicalDamage && (
-          <div className={`flex flex-col items-center px-2 py-0.5 rounded leading-tight ${isPhysicalDown ? 'bg-red-600' : 'bg-orange-600'}`}>
+        {hasDamage && (
+          <div className={`flex flex-col items-center px-2 py-0.5 rounded leading-tight ${
+            hasOnlyBaseDamage
+              ? 'bg-white'  // 基礎ダメージのみは白背景
+              : hasMagicRatio && !hasPhysicalRatio
+                ? (isMagicDown ? 'bg-red-600' : 'bg-indigo-600')  // 魔法のみ
+                : (isPhysicalDown ? 'bg-red-600' : 'bg-orange-600')  // 物理含む
+          }`}>
             <div className="flex items-center gap-1">
-              <Swords className="w-3 h-3 text-white" />
-              <span className="text-[0.75rem] font-black text-white">
-                {physicalDamage}
+              {hasOnlyBaseDamage ? (
+                <Swords className="w-3 h-3 text-slate-700" />
+              ) : hasMagicRatio && !hasPhysicalRatio ? (
+                <Wand2 className="w-3 h-3 text-white" />
+              ) : (
+                <Swords className="w-3 h-3 text-white" />
+              )}
+              <span className={`text-[0.75rem] font-black ${hasOnlyBaseDamage ? 'text-slate-900' : 'text-white'}`}>
+                {totalDamage}
               </span>
-              <span className="text-[0.5rem] font-bold text-white">ダメージ</span>
-              {isPhysicalUp && <span className="text-[0.5rem] text-green-300 font-black">↑</span>}
-              {isPhysicalDown && <span className="text-[0.5rem] text-white font-black">↓</span>}
+              <span className={`text-[0.5rem] font-bold ${hasOnlyBaseDamage ? 'text-slate-700' : 'text-white'}`}>ダメージ</span>
+              {(isPhysicalUp || isMagicUp) && <span className="text-[0.5rem] text-green-300 font-black">↑</span>}
+              {(isPhysicalDown || isMagicDown) && <span className={`text-[0.5rem] font-black ${hasOnlyBaseDamage ? 'text-red-600' : 'text-white'}`}>↓</span>}
             </div>
-            <span className="text-[0.5rem] font-bold text-white/70 leading-none">(AD×{skill.adRatio}%)</span>
-          </div>
-        )}
-        {hasMagicDamage && (
-          <div className={`flex flex-col items-center px-2 py-0.5 rounded leading-tight ${isMagicDown ? 'bg-red-600' : 'bg-indigo-600'}`}>
-            <div className="flex items-center gap-1">
-              <Wand2 className="w-3 h-3 text-white" />
-              <span className="text-[0.75rem] font-black text-white">
-                {magicDamage}
-              </span>
-              <span className="text-[0.5rem] font-bold text-white">ダメージ</span>
-              {isMagicUp && <span className="text-[0.5rem] text-green-300 font-black">↑</span>}
-              {isMagicDown && <span className="text-[0.5rem] text-white font-black">↓</span>}
-            </div>
-            <span className="text-[0.5rem] font-bold text-white/70 leading-none">(AP×{skill.apRatio}%)</span>
+            <span className={`text-[0.5rem] font-bold leading-none ${hasOnlyBaseDamage ? 'text-slate-500' : 'text-white/70'}`}>({formula})</span>
           </div>
         )}
         {!hasDamage && (

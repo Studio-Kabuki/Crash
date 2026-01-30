@@ -6,6 +6,7 @@ interface RawSkill {
   name: string;
   icon: string;
   cardType: string;
+  baseDamage: number;
   adRatio: number;
   apRatio: number;
   manaCost: number;
@@ -183,6 +184,7 @@ function convertToSkill(raw: RawSkill): Omit<Skill, 'id'> {
     name: raw.name,
     icon: raw.icon,
     cardType: (raw.cardType || 'attack') as CardType,
+    baseDamage: raw.baseDamage || 0,
     adRatio: raw.adRatio,
     apRatio: raw.apRatio,
     manaCost: raw.manaCost,

@@ -174,17 +174,19 @@ const App: React.FC = () => {
   };
 
   // 手札を引く
-  const drawHand = useCallback((currentDeck: Skill[], remainingHaste: number) => {
+  const drawHand = useCallback((currentDeck: Skill[], remainingHaste: number, currentStack?: Skill[]) => {
     if (remainingHaste <= 0) {
       setHand([]);
       return;
     }
-    
+
     if (currentDeck.length === 0) {
-      const usedIds = [...stack.map(s => s.id), ...hand.map(h => h.id)];
+      // currentStackが渡された場合はそれを使う（状態更新前の最新値）
+      const stackForIds = currentStack ?? stack;
+      const usedIds = [...stackForIds.map(s => s.id), ...hand.map(h => h.id)];
       const recycledDeck = shuffle(permanentDeck.filter(p => !usedIds.includes(p.id)));
       if (recycledDeck.length === 0) {
-         setHand([]); 
+         setHand([]);
          return;
       }
       setDeck(recycledDeck);
@@ -374,11 +376,12 @@ const App: React.FC = () => {
     return skill.cardType === 'support';  // サポートカードのみ無効化
   };
 
-  // スキルの基本ダメージを計算（物理/魔法別々に倍率適用）
+  // スキルの基本ダメージを計算（基礎ダメージ + 物理/魔法別々に倍率適用）
   const getSkillBaseDamage = (s: Skill) => {
+    const baseDmg = s.baseDamage || 0;
     const physicalDmg = Math.floor(heroStats.ad * s.adRatio / 100 * battleEvent.physicalMultiplier);
     const magicDmg = Math.floor(heroStats.ap * s.apRatio / 100 * battleEvent.magicMultiplier);
-    return physicalDmg + magicDmg;
+    return baseDmg + physicalDmg + magicDmg;
   };
 
   // chargeバフがあるかチェック（ダメージ表示用）
@@ -456,7 +459,7 @@ const App: React.FC = () => {
 
     // UIボタンからの精神統一はヘイストを10消費
     const restDelay = 10;
-    const dummySkill: Skill = { id: 'rest', name: '精神統一', icon: '', cardType: 'support', adRatio: 0, apRatio: 0, manaCost: 0, delay: restDelay, rarity: 'C', color: '', borderColor: '', borderRadiusClass: '', heightClass: '', widthClass: '' };
+    const dummySkill: Skill = { id: 'rest', name: '精神統一', icon: '', cardType: 'support', baseDamage: 0, adRatio: 0, apRatio: 0, manaCost: 0, delay: restDelay, rarity: 'C', color: '', borderColor: '', borderRadiusClass: '', heightClass: '', widthClass: '' };
     const newStack = [...stack, dummySkill];
     setStack(newStack);
 
@@ -575,7 +578,7 @@ const App: React.FC = () => {
         if (newHaste <= 0) {
              handleEnemyAttack(newStack, newDeck);
         } else {
-            drawHand(newDeck, newHaste);
+            drawHand(newDeck, newHaste, newStack);
         }
     }, 450);
   };

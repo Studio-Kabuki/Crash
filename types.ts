@@ -69,6 +69,7 @@ export interface Skill {
   name: string;
   icon: string;
   cardType: CardType;     // アタック or サポート
+  baseDamage: number;     // 基礎ダメージ
   adRatio: number;        // 物理係数（%）
   apRatio: number;        // 魔法係数（%）
   manaCost: number;
