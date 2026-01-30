@@ -849,20 +849,12 @@ const App: React.FC = () => {
                     <Coins className="text-yellow-500" size={12} />
                     <span className="text-[0.6875rem] font-black text-yellow-400">{gold}G</span>
                 </div>
-                <div className="h-4 w-[1px] bg-slate-800"></div>
-                <div className="flex flex-col items-end">
-                    <span className="text-[0.4375rem] text-red-400 font-bold uppercase tracking-widest">LIFE</span>
-                    <div className="flex items-center gap-0.5">
-                      {[...Array(maxLife)].map((_, i) => <Heart key={i} size={14} className={`transition-all duration-300 ${i < life ? 'text-red-500 fill-red-500 drop-shadow-[0_0_5px_rgba(239,68,68,0.5)]' : 'text-slate-800 fill-slate-900'}`} />)}
-                    </div>
-                </div>
-                <div className="h-4 w-[1px] bg-slate-800"></div>
-                <div className="flex flex-col items-end">
-                    <span className="text-[0.4375rem] text-blue-400 font-bold uppercase tracking-widest">魔力</span>
-                    <div className="flex items-center gap-1 font-black text-blue-400 text-[0.625rem]">{mana} <span className="text-[0.5rem] text-slate-600">/ {maxMana}</span></div>
-                </div>
-                <div className="h-4 w-[1px] bg-slate-800"></div>
-                {gameState !== 'START' && <button onClick={() => setGameState('START')} className="p-1 hover:bg-slate-800 rounded-full text-slate-600"><RotateCcw size={14} /></button>}
+                {gameState !== 'START' && (
+                  <>
+                    <div className="h-4 w-[1px] bg-slate-800"></div>
+                    <button onClick={() => setGameState('START')} className="p-1 hover:bg-slate-800 rounded-full text-slate-600"><RotateCcw size={14} /></button>
+                  </>
+                )}
             </div>
         </header>
 
@@ -884,13 +876,9 @@ const App: React.FC = () => {
                             <div className="flex items-center gap-1.5 px-2 py-0.5 bg-indigo-950/80 border border-indigo-700/50 rounded text-[0.5rem] font-black uppercase tracking-[0.1em] text-indigo-300 shadow-lg"><Layers className="w-[0.625rem] h-[0.625rem]" /><span>山札: {deck.length}</span></div>
                         </div>
 
-                        {/* 敵名 + HPゲージ（中央上部） */}
-                        <div className="absolute top-2 left-1/2 transform -translate-x-1/2 flex flex-col items-center gap-1 z-20">
+                        {/* 敵名（中央上部） */}
+                        <div className="absolute top-2 left-1/2 transform -translate-x-1/2 z-20">
                             <div className="px-3 py-0.5 bg-slate-900/90 border border-slate-700 rounded text-[0.625rem] font-black uppercase tracking-[0.1em] text-slate-300 shadow-lg">{currentEnemy.name}</div>
-                            <div className="w-40 md:w-64 h-4 md:h-5 bg-slate-950 rounded border border-slate-800 shadow-2xl overflow-hidden">
-                                <div className={`h-full transition-all duration-500 ${enemyHealth / currentEnemy.baseHP > 0.5 ? 'bg-gradient-to-r from-green-600 to-green-400' : 'bg-gradient-to-r from-red-600 to-red-400'}`} style={{ width: `${(enemyHealth / currentEnemy.baseHP) * 100}%` }}></div>
-                                <span className="absolute inset-0 flex items-center justify-center text-[0.75rem] font-black text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)] uppercase tracking-widest">HP {Math.ceil(enemyHealth)} / {currentEnemy.baseHP}</span>
-                            </div>
                         </div>
 
                         {/* デッキビュワーボタン */}
@@ -903,6 +891,12 @@ const App: React.FC = () => {
 
                         <div className={`w-32 h-32 md:w-52 md:h-52 select-none pointer-events-none drop-shadow-[0_10px_30px_rgba(0,0,0,0.5)] flex items-center justify-center ${isMonsterShaking ? 'monster-shake brightness-150 scale-110' : ''} ${isMonsterAttacking ? 'monster-attack z-50' : 'monster-idle'}`}>
                             <SafeImage src={currentEnemy.icon} alt={currentEnemy.name} className="w-full h-full object-contain" />
+                        </div>
+
+                        {/* HPゲージ（敵アイコンの下） */}
+                        <div className="w-40 md:w-64 h-4 md:h-5 bg-slate-950 rounded border border-slate-800 shadow-2xl overflow-hidden relative mt-1">
+                            <div className={`h-full transition-all duration-500 ${enemyHealth / currentEnemy.baseHP > 0.5 ? 'bg-gradient-to-r from-green-600 to-green-400' : 'bg-gradient-to-r from-red-600 to-red-400'}`} style={{ width: `${(enemyHealth / currentEnemy.baseHP) * 100}%` }}></div>
+                            <span className="absolute inset-0 flex items-center justify-center text-[0.75rem] font-black text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)] uppercase tracking-widest">HP {Math.ceil(enemyHealth)} / {currentEnemy.baseHP}</span>
                         </div>
 
                         {/* 敵のtrait表示 */}
@@ -1101,20 +1095,37 @@ const App: React.FC = () => {
                     <div className="flex flex-col gap-2 w-full">
                       {/* HASTEゲージ + ライフ表示 */}
                       <div className="flex flex-col gap-0">
-                        {/* ライフ表示（ゲージの右上） */}
-                        <div className="flex justify-end items-center gap-1 mb-0.5">
-                          <span className="text-[0.5rem] font-black text-slate-400 uppercase">Life</span>
-                          <div className="flex items-center gap-0.5">
-                            {[...Array(maxLife)].map((_, i) => (
-                              <Heart
-                                key={i}
-                                className={`w-4 h-4 transition-all duration-300 ${
-                                  i < life
-                                    ? 'text-red-500 fill-red-500 drop-shadow-[0_0_4px_rgba(239,68,68,0.5)]'
-                                    : 'text-slate-700 fill-slate-800'
-                                }`}
-                              />
-                            ))}
+                        {/* AD/AP表示（左）とライフ表示（右） */}
+                        <div className="flex justify-between items-center mb-0.5">
+                          {/* AD/AP */}
+                          <div className="flex items-center gap-2">
+                            <span className="text-[0.5rem] font-black text-slate-500">基礎パラメータ：</span>
+                            <div className="flex items-center gap-1 px-2 py-0.5 bg-orange-950/50 border border-orange-700/50 rounded">
+                              <Swords className="w-3 h-3 text-orange-400" />
+                              <span className="text-[0.5rem] font-black text-orange-400 uppercase">AD</span>
+                              <span className="text-[0.625rem] font-black text-orange-300">{heroStats.ad}</span>
+                            </div>
+                            <div className="flex items-center gap-1 px-2 py-0.5 bg-purple-950/50 border border-purple-700/50 rounded">
+                              <Sparkles className="w-3 h-3 text-purple-400" />
+                              <span className="text-[0.5rem] font-black text-purple-400 uppercase">AP</span>
+                              <span className="text-[0.625rem] font-black text-purple-300">{heroStats.ap}</span>
+                            </div>
+                          </div>
+                          {/* ライフ */}
+                          <div className="flex items-center gap-1">
+                            <span className="text-[0.5rem] font-black text-slate-400 uppercase">Life</span>
+                            <div className="flex items-center gap-0.5">
+                              {[...Array(maxLife)].map((_, i) => (
+                                <Heart
+                                  key={i}
+                                  className={`w-4 h-4 transition-all duration-300 ${
+                                    i < life
+                                      ? 'text-red-500 fill-red-500 drop-shadow-[0_0_4px_rgba(239,68,68,0.5)]'
+                                      : 'text-slate-700 fill-slate-800'
+                                  }`}
+                                />
+                              ))}
+                            </div>
                           </div>
                         </div>
 
