@@ -6,6 +6,7 @@ import { calculateHaste } from './utils/skillCalculations';
 import { useDragScroll } from './hooks/useDragScroll';
 import { Card } from './components/Card';
 import { Tooltip } from './components/Tooltip';
+import { AnimatedNumber } from './components/AnimatedNumber';
 import PlayerStatusPanel from './components/PlayerStatusPanel';
 import {
   RotateCcw, Swords, Skull, Zap, ArrowRight, ScrollText,
@@ -96,7 +97,6 @@ const App: React.FC = () => {
 
   // 手札システム
   const [baseHandSize, setBaseHandSize] = useState<number>(3); // 基礎手札枚数
-  const [isShuffling, setIsShuffling] = useState<boolean>(false); // シャッフル中表示
   const [isProcessingCard, setIsProcessingCard] = useState<boolean>(false); // カード処理中フラグ
 
   // Deck Overlay State
@@ -122,6 +122,10 @@ const App: React.FC = () => {
 
   // Ability List Overlay State (所持アビリティ一覧)
   const [isAbilityListOverlayOpen, setIsAbilityListOverlayOpen] = useState<boolean>(false);
+
+  // DECK/USEDボタンの光るエフェクト
+  const [isDeckGlowing, setIsDeckGlowing] = useState<boolean>(false);
+  const [isUsedGlowing, setIsUsedGlowing] = useState<boolean>(false);
 
   // Debug Menu Overlay State
   const [isDebugOpen, setIsDebugOpen] = useState<boolean>(false);
@@ -503,11 +507,8 @@ const App: React.FC = () => {
     if (availableDeck.length < targetHandSize) {
       const realCards = stackToUse.filter(s => s.id !== 'rest');
       if (realCards.length > 0) {
-        setIsShuffling(true);
         const recycledCards = shuffle([...realCards]);
         availableDeck = [...availableDeck, ...recycledCards];
-        // 捨て札をクリア（状態は後で更新）
-        setTimeout(() => setIsShuffling(false), 800);
       }
     }
 
@@ -543,10 +544,8 @@ const App: React.FC = () => {
 
     // 山札が足りない場合、捨て札をシャッフルして山札に追加
     if (availableDeck.length < count && stackToRecycle.length > 0) {
-      setIsShuffling(true);
       availableDeck = [...availableDeck, ...shuffle(stackToRecycle)];
       stackToRecycle = [];
-      setTimeout(() => setIsShuffling(false), 800);
     }
 
     // 引けるだけ引く
@@ -1037,7 +1036,7 @@ const App: React.FC = () => {
   };
 
   const selectSkill = (skill: Skill) => {
-    if (remainingHaste <= 0 || isMonsterAttacking || turnResetMessage || isShuffling || isProcessingCard) return;
+    if (remainingHaste <= 0 || isMonsterAttacking || turnResetMessage || isProcessingCard) return;
 
     setIsProcessingCard(true); // カード処理開始
 
@@ -1384,8 +1383,10 @@ const App: React.FC = () => {
         // 目標達成でも即クリアしない（追加開発可能）
         // 締切時にゴールドでクリア判定
 
-        // カードを使ったら1枚ドロー
-        const drawResult = drawCards(1, newHand, newDeck, newStack);
+        // カードを使ったら残りの手札を捨て札に送り、3枚ドロー
+        newStack = [...newStack, ...newHand];
+        newHand = [];
+        const drawResult = drawCards(3, newHand, newDeck, newStack);
         setHand(drawResult.newHand);
         setDeck(drawResult.newDeck);
         setStack(drawResult.newStack);
@@ -2155,15 +2156,6 @@ const App: React.FC = () => {
                             </div>
                           </div>
                         )}
-                        {isShuffling && (
-                          <div className="absolute inset-0 z-50 flex items-center justify-center animate-in zoom-in duration-300">
-                            <div className="bg-slate-950/80 backdrop-blur-sm border border-indigo-500/50 px-6 py-3 rounded-xl flex flex-col items-center shadow-2xl">
-                                <RefreshCw className="text-indigo-400 mb-2 animate-spin" size={32} />
-                                <h3 className="text-indigo-400 font-fantasy font-bold text-xl tracking-widest uppercase">Shuffling</h3>
-                                <p className="text-slate-300 text-[10px] mt-1">捨て札を山札に戻しています...</p>
-                            </div>
-                          </div>
-                        )}
                         {/* 敵名（中央上部） */}
                         <div className="absolute top-2 left-1/2 transform -translate-x-1/2 z-20">
                             <div className="px-3 py-0.5 bg-slate-900/90 border border-slate-700 rounded text-[0.625rem] font-black uppercase tracking-[0.1em] text-slate-300 shadow-lg">{currentEnemy.name}</div>
@@ -2188,19 +2180,23 @@ const App: React.FC = () => {
                             <span>ABILITY</span>
                             <span className="px-1.5 py-0.5 bg-purple-600 rounded text-white text-[8px]">{passives.length}</span>
                           </button>
-                          <button onClick={() => setIsDeckOverlayOpen(true)} className="flex items-center gap-1.5 px-2 py-1 bg-slate-900/90 backdrop-blur-md border border-indigo-500/40 rounded-lg text-[9px] font-black text-indigo-300 uppercase tracking-widest hover:bg-slate-800 transition-all shadow-xl">
+                          <button onClick={() => setIsDeckOverlayOpen(true)} className={`flex items-center gap-1.5 px-2 py-1 bg-slate-900/90 backdrop-blur-md border rounded-lg text-[9px] font-black text-indigo-300 uppercase tracking-widest hover:bg-slate-800 transition-all shadow-xl ${isDeckGlowing ? 'border-indigo-400 shadow-[0_0_15px_rgba(99,102,241,0.8)]' : 'border-indigo-500/40'}`}>
                             <Layers size={12} />
                             <span>DECK</span>
-                            <span className="px-1.5 py-0.5 bg-indigo-600 rounded text-white text-[8px]">{deck.length}</span>
+                            <span className="px-1.5 py-0.5 bg-indigo-600 rounded text-white text-[8px]">
+                              <AnimatedNumber value={deck.length} duration={600} onAnimatingChange={setIsDeckGlowing} />
+                            </span>
                           </button>
                         </div>
 
                         {/* 使用済みカードビューワーボタン（右下） */}
                         <div className="absolute bottom-1 right-1 md:bottom-2 md:right-2 z-40">
-                          <button onClick={() => setIsDiscardOpen(true)} className="flex items-center gap-1.5 px-2 py-1 bg-slate-900/90 backdrop-blur-md border border-red-500/40 rounded-lg text-[9px] font-black text-red-300 uppercase tracking-widest hover:bg-slate-800 transition-all shadow-xl">
+                          <button onClick={() => setIsDiscardOpen(true)} className={`flex items-center gap-1.5 px-2 py-1 bg-slate-900/90 backdrop-blur-md border rounded-lg text-[9px] font-black text-red-300 uppercase tracking-widest hover:bg-slate-800 transition-all shadow-xl ${isUsedGlowing ? 'border-red-400 shadow-[0_0_15px_rgba(239,68,68,0.8)]' : 'border-red-500/40'}`}>
                             <ScrollText size={12} />
                             <span>USED</span>
-                            <span className="px-1.5 py-0.5 bg-red-600 rounded text-white text-[8px]">{stack.length}</span>
+                            <span className="px-1.5 py-0.5 bg-red-600 rounded text-white text-[8px]">
+                              <AnimatedNumber value={stack.length} duration={600} onAnimatingChange={setIsUsedGlowing} />
+                            </span>
                           </button>
                         </div>
 
@@ -2663,7 +2659,7 @@ const App: React.FC = () => {
                                         <Card
                                             skill={item}
                                             onClick={() => { if (!shouldPreventClick()) selectSkill(item); }}
-                                            disabled={isMonsterAttacking || turnResetMessage || isShuffling}
+                                            disabled={isMonsterAttacking || !!turnResetMessage}
                                             mana={mana}
                                             currentHaste={remainingHaste}
                                             heroStats={heroStats}

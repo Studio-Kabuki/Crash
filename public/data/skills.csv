@@ -4,7 +4,7 @@ number,number,string,string,string,string,string,number,number,number,number,num
 0,1,コーディング,NEUTRAL,社員の数だけ収益UP,基本にして奥義,attack,0,100,0,1,0,,,,bg-blue-700,border-blue-400,h-9,w-52,rounded-md,https://img.icons8.com/fluency/144/code.png,program
 0,0,スタンドアップ,NEUTRAL,収益 +50% ,チームワーク,support,0,0,0,1,0,add_buff,on_use,buffId=UNITY,bg-green-700,border-green-400,h-9,w-52,rounded-md,https://img.icons8.com/fluency/144/meeting.png,
 0,0,集中,NEUTRAL,収益 x1.4倍,深い没入,support,0,0,0,1,0,add_buff,on_use,buffId=FOCUS,bg-indigo-700,border-indigo-400,h-9,w-52,rounded-md,https://img.icons8.com/fluency/144/target.png,
-0,0,日雇い派遣,NEUTRAL,社員 +20\n(この開発中のみ),仲間を増やす,support,0,0,0,1,0,add_strength,on_use,value=20,bg-purple-700,border-purple-400,h-9,w-52,rounded-md,https://img.icons8.com/fluency/144/add-user-male.png,
+0,0,日雇い派遣,NEUTRAL,社員 +40\n(この開発中のみ),仲間を増やす,support,0,0,0,1,0,add_strength,on_use,value=40,bg-purple-700,border-purple-400,h-9,w-52,rounded-md,https://img.icons8.com/fluency/144/add-user-male.png,
 0,0,発売延期,NEUTRAL,締切 +2\nブラック度 -20,時間を稼ぐ,support,0,0,0,1,-20,add_time,on_use,value=2,bg-slate-700,border-slate-400,h-9,w-52,rounded-md,https://img.icons8.com/fluency/144/calendar.png,
 0,0,デスマーチ,BLACK,時間を圧縮して\n締切 +2\nブラック度 +20,限界突破,support,0,0,0,1,20,add_time,on_use,value=2,bg-red-800,border-red-500,h-9,w-52,rounded-md,https://img.icons8.com/fluency/144/fire-element.png,
 0,0,青天井ガチャ,BLACK,収益 ^1.5乗\nブラック度 +40,射幸心煽り,support,0,0,0,1,40,add_buff,on_use,buffId=GACHA,bg-pink-800,border-pink-400,h-9,w-52,rounded-md,https://img.icons8.com/fluency/144/slot-machine.png,
