@@ -1,10 +1,9 @@
 import React from 'react';
-import { Heart, HeartCrack, Zap, Hexagon, Swords, Sparkles, Coins, Layers } from 'lucide-react';
+import { Heart, HeartCrack, Zap, Hexagon, Users, Coins, Layers, TrendingUp, TrendingDown } from 'lucide-react';
 import { Tooltip } from './Tooltip';
 
 interface HeroStats {
-  ad: number;
-  ap: number;
+  employees: number;
 }
 
 interface PlayerBuff {
@@ -25,6 +24,7 @@ interface PlayerStatusPanelProps {
   maxMana: number;
   gold: number;
   heroStats: HeroStats;
+  workStyle?: number;  // ホワイト/ブラック度 (-100 ~ +100)
   playerBuffs?: PlayerBuff[];
   showHasteGauge?: boolean;
   showManaGauge?: boolean;
@@ -43,6 +43,7 @@ const PlayerStatusPanel: React.FC<PlayerStatusPanelProps> = ({
   maxMana,
   gold,
   heroStats,
+  workStyle = 0,
   playerBuffs = [],
   showHasteGauge = true,
   showManaGauge = true,
@@ -64,6 +65,23 @@ const PlayerStatusPanel: React.FC<PlayerStatusPanelProps> = ({
       }
     });
     return Array.from(buffMap.values());
+  };
+
+  // ワークスタイルの表示
+  const getWorkStyleLabel = () => {
+    if (workStyle >= 50) return 'ホワイト';
+    if (workStyle >= 20) return 'ややホワイト';
+    if (workStyle > -20) return '普通';
+    if (workStyle > -50) return 'ややブラック';
+    return 'ブラック';
+  };
+
+  const getWorkStyleColor = () => {
+    if (workStyle >= 50) return 'text-green-400';
+    if (workStyle >= 20) return 'text-green-300';
+    if (workStyle > -20) return 'text-slate-400';
+    if (workStyle > -50) return 'text-red-300';
+    return 'text-red-400';
   };
 
   return (
@@ -144,13 +162,13 @@ const PlayerStatusPanel: React.FC<PlayerStatusPanelProps> = ({
         </div>
       )}
 
-      {/* MANAゲージ */}
+      {/* 士気ゲージ */}
       {showManaGauge && (
         <div className="flex items-center gap-2">
           <Tooltip content={"一部のカードの使用時に消費する。\n戦闘終了時に回復する。\n上限を超えて回復は出来ない。"}>
             <div className="flex items-center gap-1 w-14 cursor-pointer hover:bg-slate-800/50 rounded px-1 -mx-1 transition-colors">
               <Hexagon className="w-4 h-4 text-blue-400" />
-              <span className="text-[0.5rem] font-black text-blue-400">MANA</span>
+              <span className="text-[0.5rem] font-black text-blue-400">士気</span>
             </div>
           </Tooltip>
             <div className="flex-1 h-6 bg-slate-950 rounded border border-slate-700 relative overflow-hidden">
@@ -175,18 +193,28 @@ const PlayerStatusPanel: React.FC<PlayerStatusPanelProps> = ({
       <div className="flex items-center justify-between gap-2 mt-1">
         <div className="flex items-center gap-2">
           <span className="text-[0.5rem] font-black text-slate-500">基礎パラメータ：</span>
-          <Tooltip content={"物理ダメージが上昇する。\nカードによって倍率は異なり、倍率が高いほど後半にダメージがスケールしやすい。\n\n※ミックスダメージのカードは、基礎ダメージを\n物理/魔法に半分ずつ割り振って耐性計算する。"}>
-            <div className="flex items-center gap-1 px-2 py-0.5 bg-orange-950/50 border border-orange-700/50 rounded cursor-pointer hover:bg-orange-900/50 transition-colors">
-              <Swords className="w-3 h-3 text-orange-400" />
-              <span className="text-[0.5rem] font-black text-orange-400 uppercase">AD</span>
-              <span className="text-[0.625rem] font-black text-orange-300">{heroStats.ad}</span>
+          <Tooltip content={"社員数が多いほど、一部のカードの進捗が増える。\n採用活動などで増やせる。"}>
+            <div className="flex items-center gap-1 px-2 py-0.5 bg-amber-950/50 border border-amber-700/50 rounded cursor-pointer hover:bg-amber-900/50 transition-colors">
+              <Users className="w-3 h-3 text-amber-400" />
+              <span className="text-[0.5rem] font-black text-amber-400">社員</span>
+              <span className="text-[0.625rem] font-black text-amber-300">{heroStats.employees}</span>
             </div>
           </Tooltip>
-          <Tooltip content={"魔法ダメージが上昇する。\n魔法の方がダメージ倍率の低いカードが多い傾向。\n\n※ミックスダメージのカードは、基礎ダメージを\n物理/魔法に半分ずつ割り振って耐性計算する。"}>
-            <div className="flex items-center gap-1 px-2 py-0.5 bg-cyan-950/50 border border-cyan-700/50 rounded cursor-pointer hover:bg-cyan-900/50 transition-colors">
-              <Sparkles className="w-3 h-3 text-cyan-400" />
-              <span className="text-[0.5rem] font-black text-cyan-400 uppercase">AP</span>
-              <span className="text-[0.625rem] font-black text-cyan-300">{heroStats.ap}</span>
+          <Tooltip content={`ホワイト/ブラック度: ${workStyle}\n+がホワイト、-がブラック\nカードによって変化する`}>
+            <div className={`flex items-center gap-1 px-2 py-0.5 rounded cursor-pointer transition-colors ${
+              workStyle >= 20
+                ? 'bg-green-950/50 border border-green-700/50 hover:bg-green-900/50'
+                : workStyle <= -20
+                  ? 'bg-red-950/50 border border-red-700/50 hover:bg-red-900/50'
+                  : 'bg-slate-800/50 border border-slate-600/50 hover:bg-slate-700/50'
+            }`}>
+              {workStyle >= 0 ? (
+                <TrendingUp className={`w-3 h-3 ${getWorkStyleColor()}`} />
+              ) : (
+                <TrendingDown className={`w-3 h-3 ${getWorkStyleColor()}`} />
+              )}
+              <span className={`text-[0.5rem] font-black ${getWorkStyleColor()}`}>{getWorkStyleLabel()}</span>
+              <span className={`text-[0.625rem] font-black ${getWorkStyleColor()}`}>{workStyle > 0 ? `+${workStyle}` : workStyle}</span>
             </div>
           </Tooltip>
         </div>

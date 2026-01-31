@@ -1,5 +1,5 @@
 deckId,deckName,skillName,count
 string,string,string,number
-default,スタンダード,スラッシュ,2
-default,スタンダード,ハイスラッシュ,1
-default,スタンダード,ためる,1
+default,スタンダード,コーディング,4
+default,スタンダード,ミーティング,2
+default,スタンダード,リファクタリング,2

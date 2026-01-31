@@ -44,7 +44,7 @@ export interface PlayerBuff {
   icon: string;
   description: string;
   value: number;           // 効果量（回数、ステータス増加量など）
-  stat?: 'ad' | 'ap' | 'sp' | 'mp';  // ステータス系バフの対象
+  stat?: 'employees' | 'sp' | 'mp';  // ステータス系バフの対象
 }
 
 // 効果の発動タイミング
@@ -57,23 +57,23 @@ export type EffectTrigger =
 // カード分類
 export type CardType = 'attack' | 'support';
 
-export type Rarity = 'SSR' | 'SR' | 'R' | 'C';
+// ワークスタイル属性（旧レアリティ）
+export type Rarity = 'BLACK' | 'WHITE' | 'NEUTRAL';
 
 // 主人公のパラメータ
 export interface HeroStats {
-  ad: number;  // 物理攻撃力
-  ap: number;  // 魔法攻撃力
-  sp: number;  // ヘイスト（速度）
-  mp: number;  // マナ
+  employees: number;  // 社員数（旧AD/AP統合）
+  sp: number;         // ヘイスト（速度）
+  mp: number;         // 士気（旧マナ）
 }
 
 // 効果パラメータ（柔軟な構造）
 export interface EffectParams {
   value?: number;           // 汎用値
   count?: number;           // 回数
-  stat?: 'ad' | 'ap' | 'sp' | 'mp';  // 対象ステータス
+  stat?: 'employees' | 'sp' | 'mp';  // 対象ステータス
   duration?: 'turn' | 'battle' | 'permanent';  // 持続時間
-  targetName?: string;      // 対象名（スラッシュなど）
+  targetName?: string;      // 対象名
   buffId?: string;          // バフ定義ID（BUFFS参照）
   drawValue?: number;       // ドロー枚数
 }
@@ -91,10 +91,10 @@ export interface Skill {
   icon: string;
   cardType: CardType;     // アタック or サポート
   baseDamage: number;     // 基礎ダメージ
-  adRatio: number;        // 物理係数（%）
-  apRatio: number;        // 魔法係数（%）
-  manaCost: number;
+  employeeRatio: number;  // 社員数比率（%）
+  manaCost: number;       // 士気コスト
   delay: number;          // ヘイスト消費量（ディレイ）
+  workStyleChange?: number; // ホワイト/ブラック度変化
   color: string;
   borderColor: string;
   heightClass: string;
@@ -136,11 +136,10 @@ export interface PassiveEffect {
   name: string;
   icon: string;
   description: string;
-  type: 'score_flat' | 'capacity_boost' | 'score_mult' | 'adjacency_to_mult' | 'sauce_mult_add' | 'max_life_boost' | 'flat_damage_bonus' | 'category_buff' | 'ad_boost' | 'ap_boost' | 'ap_mana_boost' | 'physical_haste_reduction' | 'hand_size_boost' | 'gold_bonus' | 'base_damage_mult' | 'mana_to_haste';
+  type: 'score_flat' | 'capacity_boost' | 'score_mult' | 'max_life_boost' | 'flat_damage_bonus' | 'employee_add' | 'employee_mult' | 'haste_add' | 'hand_size_boost' | 'gold_bonus';
   value: number;
-  value2?: number;  // 複合効果用（ap_mana_boostのマナ値など）
+  value2?: number;  // 複合効果用
   rarity: Rarity;
-  targetCategory?: string;  // category_buff用
 }
 
 export interface CardProps {
@@ -150,13 +149,8 @@ export interface CardProps {
   mana: number;
   currentHaste: number;
   heroStats: HeroStats;
-  physicalMultiplier?: number;
-  magicMultiplier?: number;
+  damageMultiplier?: number;      // ダメージ倍率
   effectsDisabled?: boolean;
-  lastCardWasPhysical?: boolean;  // 前のカードが物理ダメージだったか
   // 能力ダメージ計算用
-  deckSlashCount?: number;        // デッキ内のスラッシュ枚数
   enemyDamageTaken?: number;      // 敵の減少HP（最大HP - 現在HP）
-  // パッシブ効果
-  physicalHasteReduction?: number; // 物理のみカードのヘイスト削減率（0-100）
 }

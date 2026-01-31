@@ -47,17 +47,20 @@ const App: React.FC = () => {
   const [currentComboPower, setCurrentComboPower] = useState<number>(0);
 
   // デフォルト初期値（CSVロード前のフォールバック）
-  const defaultHeroStats: HeroStats = { ad: 30, ap: 10, sp: 30, mp: 50 };
+  const defaultHeroStats: HeroStats = { employees: 10, sp: 30, mp: 50 };
   const defaultMana = 50;
-  const defaultLife = 2;
+  const defaultLife = 3;
   const defaultEvent: BattleEvent = {
     id: 'calm',
-    title: '静寂',
-    description: '特に異常はありません。',
+    title: '通常業務',
+    description: '特に問題はありません。',
     physicalMultiplier: 1.0,
     magicMultiplier: 1.0,
     type: 'neutral'
   };
+
+  // ワークスタイル（ホワイト/ブラック度）
+  const [workStyle, setWorkStyle] = useState<number>(0);
 
   const [battleEvent, setBattleEvent] = useState<BattleEvent>(defaultEvent);
 
@@ -692,37 +695,15 @@ const App: React.FC = () => {
       baseDmg = baseDmg * 2;
     }
 
-    // マイナス係数は「係数なし」として扱う（ベースダメージのみ攻撃）
-    const hasPhysical = s.adRatio > 0;
-    const hasMagic = s.apRatio > 0;
+    // 筋力バフを社員数に加算
+    const effectiveEmployees = heroStats.employees + getStrengthValue();
 
-    // 基礎ダメージの倍率適用
-    let scaledBaseDmg = 0;
-    if (hasPhysical && hasMagic) {
-      // ミックス: 半分ずつ割り振って計算
-      const halfBase = baseDmg / 2;
-      scaledBaseDmg = Math.floor(halfBase * battleEvent.physicalMultiplier + halfBase * battleEvent.magicMultiplier);
-    } else if (hasPhysical) {
-      // 物理のみ: 物理倍率を適用
-      scaledBaseDmg = Math.floor(baseDmg * battleEvent.physicalMultiplier);
-    } else if (hasMagic) {
-      // 魔法のみ: 魔法倍率を適用
-      scaledBaseDmg = Math.floor(baseDmg * battleEvent.magicMultiplier);
-    } else {
-      // 係数なし（マイナス係数含む）: 倍率の影響を受けない（真のダメージ）
-      scaledBaseDmg = baseDmg;
-    }
-
-    // 筋力バフをADに加算
-    const effectiveAd = heroStats.ad + getStrengthValue();
-
-    // マイナス係数の場合はベースダメージから差し引く
-    const physicalDmg = Math.floor(effectiveAd * s.adRatio / 100 * battleEvent.physicalMultiplier);
-    const magicDmg = Math.floor(heroStats.ap * s.apRatio / 100 * battleEvent.magicMultiplier);
+    // 社員数ダメージ計算
+    const employeeDmg = Math.floor(effectiveEmployees * (s.employeeRatio || 0) / 100);
 
     // 征服者などのカード固有倍率を適用
     const skillMultiplier = s.multiplier ?? 1.0;
-    const totalDamage = Math.floor((scaledBaseDmg + physicalDmg + magicDmg) * skillMultiplier);
+    const totalDamage = Math.floor((baseDmg + employeeDmg) * skillMultiplier);
 
     // ダメージは0未満にならない
     return Math.max(0, totalDamage);
@@ -756,15 +737,12 @@ const App: React.FC = () => {
       .reduce((sum, b) => sum + b.value, 0);
   };
 
-  // 前のカードが物理ダメージだったかチェック
-  const wasLastCardPhysical = (): boolean => {
+  // 前のカードがアタックだったかチェック
+  const wasLastCardAttack = (): boolean => {
     if (stack.length === 0) return false;
     const lastCard = stack[stack.length - 1];
-    return lastCard.adRatio > 0;  // 物理係数があれば物理ダメージとみなす
+    return lastCard.cardType === 'attack';
   };
-
-  // 能力ダメージ計算用の値
-  const deckSlashCount = deck.filter(d => d.name.includes('スラッシュ')).length;
   const enemyDamageTaken = currentEnemy.baseHP - enemyHealth;
 
   const calculateComboPower = (skills: Skill[], chargeMultiplier: number = 1) => {
@@ -908,12 +886,13 @@ const App: React.FC = () => {
     setHand(newHand);
     setDeck(newDeck);
 
-    // ディレイ計算（共通関数を使用）
-    const { actualDelay } = calculateHaste({
-      skill,
-      physicalHasteReduction,
-      lastCardWasPhysical: wasLastCardPhysical()
-    });
+    // ワークスタイル変化
+    if (skill.workStyleChange) {
+      setWorkStyle(prev => Math.max(-100, Math.min(100, prev + skill.workStyleChange!)));
+    }
+
+    // ディレイ計算
+    const actualDelay = skill.delay;
 
     setTimeout(() => {
         setIsMonsterShaking(true);
@@ -984,22 +963,14 @@ const App: React.FC = () => {
         let damageDealt = (newTotalPower - currentComboPower) * repeatCount;
         const poisonDmg = isEnemyPoisoned ? 30 : 0;
 
-        // mana_consume_damage: 消費マナ×係数の魔法ダメージを追加
+        // mana_consume_damage: 消費士気×係数のダメージを追加
         let manaConsumeDmg = 0;
         if (consumedManaForDamage > 0 && skill.effect?.type === 'mana_consume_damage') {
           const ratio = (skill.effect.params.value || 100) / 100;
-          manaConsumeDmg = Math.floor(consumedManaForDamage * ratio * battleEvent.magicMultiplier);
+          manaConsumeDmg = Math.floor(consumedManaForDamage * ratio);
         }
 
-        // magic_count_bonus: 使用した魔法カード枚数×係数×APダメージ
-        let magicCountDmg = 0;
-        if (skill.effect?.type === 'magic_count_bonus' && !isEffectDisabled(skill)) {
-          const magicCardCount = newStack.filter(s => s.apRatio > 0).length;
-          const ratio = (skill.effect.params.value || 50) / 100;
-          magicCountDmg = Math.floor(magicCardCount * ratio * heroStats.ap * battleEvent.magicMultiplier);
-        }
-
-        let finalDamage = damageDealt + poisonDmg + manaConsumeDmg + magicCountDmg;
+        let finalDamage = damageDealt + poisonDmg + manaConsumeDmg;
 
         // ARMORトレイト: 閾値以下のダメージを無効化
         if (battleEvent.armorThreshold && finalDamage > 0 && finalDamage <= battleEvent.armorThreshold) {
@@ -1036,13 +1007,12 @@ const App: React.FC = () => {
               setTimeout(() => setFloatingDamages(p => p.filter(d => d.id !== mhId)), 1000);
            }
            if (skill.effect.type === 'magic_lifesteal') {
-              // 魔法ダメージ分のみマナ回復（APレシオ部分のみ）
-              const magicDmg = Math.floor(heroStats.ap * skill.apRatio / 100 * battleEvent.magicMultiplier);
-              const perHitMagicDmg = Math.floor(magicDmg / repeatCount);
-              if (perHitMagicDmg > 0) {
-                setMana(prev => Math.min(maxMana, prev + perHitMagicDmg));
+              // ダメージ分士気回復
+              const perHitDmg = Math.floor(perHitDamage);
+              if (perHitDmg > 0) {
+                setMana(prev => Math.min(maxMana, prev + perHitDmg));
                 const mhId = generateId();
-                setFloatingDamages(prev => [...prev, { id: mhId, value: perHitMagicDmg, isMana: true }]);
+                setFloatingDamages(prev => [...prev, { id: mhId, value: perHitDmg, isMana: true }]);
                 setTimeout(() => setFloatingDamages(p => p.filter(d => d.id !== mhId)), 1000);
               }
            }
@@ -1063,8 +1033,8 @@ const App: React.FC = () => {
              addBuff('STRENGTH', strengthAmount);
            }
            if (skill.effect.type === 'double_strength') {
-             // 前が物理なら筋力2倍
-             if (wasLastCardPhysical()) {
+             // 前がアタックなら筋力2倍
+             if (wasLastCardAttack()) {
                setPlayerBuffs(prev => {
                  const strengthBuff = prev.find(b => b.type === 'strength');
                  if (strengthBuff) {
@@ -1077,29 +1047,28 @@ const App: React.FC = () => {
              }
            }
            if (skill.effect.type === 'add_slash_to_deck') {
-             // 0コスト・0ヘイストのスラッシュを戦闘中デッキに追加
-             const slashCount = skill.effect.params.value || 3;
-             const baseSlash: Omit<Skill, 'id'> = {
-               name: 'スラッシュ',
-               icon: 'https://img.icons8.com/fluency/144/sword.png',
+             // 0コスト・0ヘイストのコーディングを戦闘中デッキに追加
+             const cardCount = skill.effect.params.value || 3;
+             const baseCard: Omit<Skill, 'id'> = {
+               name: 'コーディング',
+               icon: 'https://img.icons8.com/fluency/144/source-code.png',
                cardType: 'attack',
                baseDamage: 20,
-               adRatio: 100,
-               apRatio: 0,
+               employeeRatio: 100,
                manaCost: 0,
                delay: 0,
                color: 'bg-slate-700',
                borderColor: 'border-slate-400',
                heightClass: 'h-8',
                widthClass: 'w-56',
-               borderRadiusClass: 'rounded-sm transform -skew-x-12',
+               borderRadiusClass: 'rounded-sm',
                rarity: 'C' as const
              };
-             const newSlashes: Skill[] = [];
-             for (let i = 0; i < slashCount; i++) {
-               newSlashes.push({ ...baseSlash, id: generateId() });
+             const newCards: Skill[] = [];
+             for (let i = 0; i < cardCount; i++) {
+               newCards.push({ ...baseCard, id: generateId() });
              }
-             newDeck = [...newDeck, ...newSlashes];
+             newDeck = [...newDeck, ...newCards];
              setDeck(newDeck);
            }
            if (skill.effect.type === 'add_parry') {
@@ -1129,10 +1098,10 @@ const App: React.FC = () => {
              newStack = drawResult.newStack;
            }
            if (skill.effect.type === 'discard_magic_mana') {
-             // 捨て札の魔法カード（apRatio > 0）×valueのマナ回復＋1ドロー
-             const magicCardCount = newStack.filter(s => s.apRatio > 0).length;
+             // 捨て札のサポートカード×valueの士気回復＋1ドロー
+             const supportCardCount = newStack.filter(s => s.cardType === 'support').length;
              const manaPerCard = skill.effect.params.value || 10;
-             const recoveryAmount = magicCardCount * manaPerCard;
+             const recoveryAmount = supportCardCount * manaPerCard;
              if (recoveryAmount > 0) {
                setMana(prev => Math.min(maxMana, prev + recoveryAmount));
                const mhId = generateId();
@@ -1161,8 +1130,8 @@ const App: React.FC = () => {
              newStack = drawResult.newStack;
            }
            if (skill.effect.type === 'physical_chain_haste_draw') {
-             // 前が物理攻撃ならドロー
-             if (wasLastCardPhysical()) {
+             // 前がアタックカードならドロー
+             if (wasLastCardAttack()) {
                const drawCount = skill.effect.params.drawValue || 1;
                const drawResult = drawCards(drawCount, newHand, newDeck, newStack);
                newHand = drawResult.newHand;
@@ -2302,21 +2271,32 @@ const App: React.FC = () => {
 
                       {/* 基礎パラメータとBUFFS */}
                       <div className="flex items-center justify-between gap-2 mt-1">
-                        {/* 基礎パラメータ AD/AP */}
+                        {/* 基礎パラメータ 社員数/ワークスタイル */}
                         <div className="flex items-center gap-2">
                           <span className="text-[0.5rem] font-black text-slate-500">基礎パラメータ：</span>
-                          <Tooltip content={"物理ダメージが上昇する。\nカードによって倍率は異なり、倍率が高いほど後半にダメージがスケールしやすい。\n\n※ミックスダメージのカードは、基礎ダメージを\n物理/魔法に半分ずつ割り振って耐性計算する。"}>
-                            <div className="flex items-center gap-1 px-2 py-0.5 bg-orange-950/50 border border-orange-700/50 rounded cursor-pointer hover:bg-orange-900/50 transition-colors">
-                              <Swords className="w-3 h-3 text-orange-400" />
-                              <span className="text-[0.5rem] font-black text-orange-400 uppercase">AD</span>
-                              <span className="text-[0.625rem] font-black text-orange-300">{heroStats.ad}</span>
+                          <Tooltip content={"社員数が多いほど、一部のカードの進捗が増える。\n採用活動などで増やせる。"}>
+                            <div className="flex items-center gap-1 px-2 py-0.5 bg-amber-950/50 border border-amber-700/50 rounded cursor-pointer hover:bg-amber-900/50 transition-colors">
+                              <span className="text-[0.5rem] font-black text-amber-400">社員</span>
+                              <span className="text-[0.625rem] font-black text-amber-300">{heroStats.employees}</span>
                             </div>
                           </Tooltip>
-                          <Tooltip content={"魔法ダメージが上昇する。\n魔法の方がダメージ倍率の低いカードが多い傾向。\n\n※ミックスダメージのカードは、基礎ダメージを\n物理/魔法に半分ずつ割り振って耐性計算する。"}>
-                            <div className="flex items-center gap-1 px-2 py-0.5 bg-cyan-950/50 border border-cyan-700/50 rounded cursor-pointer hover:bg-cyan-900/50 transition-colors">
-                              <Sparkles className="w-3 h-3 text-cyan-400" />
-                              <span className="text-[0.5rem] font-black text-cyan-400 uppercase">AP</span>
-                              <span className="text-[0.625rem] font-black text-cyan-300">{heroStats.ap}</span>
+                          <Tooltip content={`ホワイト/ブラック度: ${workStyle}\n+がホワイト、-がブラック\nカードによって変化する`}>
+                            <div className={`flex items-center gap-1 px-2 py-0.5 rounded cursor-pointer transition-colors ${
+                              workStyle >= 20
+                                ? 'bg-green-950/50 border border-green-700/50 hover:bg-green-900/50'
+                                : workStyle <= -20
+                                  ? 'bg-red-950/50 border border-red-700/50 hover:bg-red-900/50'
+                                  : 'bg-slate-800/50 border border-slate-600/50 hover:bg-slate-700/50'
+                            }`}>
+                              <span className={`text-[0.5rem] font-black ${
+                                workStyle >= 50 ? 'text-green-400' :
+                                workStyle >= 20 ? 'text-green-300' :
+                                workStyle > -20 ? 'text-slate-400' :
+                                workStyle > -50 ? 'text-red-300' : 'text-red-400'
+                              }`}>{workStyle >= 50 ? 'ホワイト' : workStyle >= 20 ? 'ややホワイト' : workStyle > -20 ? '普通' : workStyle > -50 ? 'ややブラック' : 'ブラック'}</span>
+                              <span className={`text-[0.625rem] font-black ${
+                                workStyle >= 0 ? 'text-green-300' : 'text-red-300'
+                              }`}>{workStyle > 0 ? `+${workStyle}` : workStyle}</span>
                             </div>
                           </Tooltip>
                         </div>
@@ -2381,13 +2361,9 @@ const App: React.FC = () => {
                                             mana={mana}
                                             currentHaste={currentHaste}
                                             heroStats={heroStats}
-                                            physicalMultiplier={battleEvent.physicalMultiplier}
-                                            magicMultiplier={battleEvent.magicMultiplier}
+                                            damageMultiplier={1.0}
                                             effectsDisabled={isEffectDisabled(item)}
-                                            lastCardWasPhysical={wasLastCardPhysical()}
-                                            deckSlashCount={deckSlashCount}
                                             enemyDamageTaken={enemyDamageTaken}
-                                            physicalHasteReduction={physicalHasteReduction}
                                         />
                                     </div>
                                 ))}
@@ -2455,6 +2431,7 @@ const App: React.FC = () => {
                         maxMana={maxMana}
                         gold={gold}
                         heroStats={heroStats}
+                        workStyle={workStyle}
                         showHasteGauge={true}
                         showManaGauge={true}
                         showGold={true}
@@ -2474,6 +2451,7 @@ const App: React.FC = () => {
                         maxMana={maxMana}
                         gold={gold}
                         heroStats={heroStats}
+                        workStyle={workStyle}
                         showHasteGauge={true}
                         showManaGauge={true}
                         showGold={true}
@@ -2493,6 +2471,7 @@ const App: React.FC = () => {
                         maxMana={maxMana}
                         gold={gold}
                         heroStats={heroStats}
+                        workStyle={workStyle}
                         showHasteGauge={true}
                         showManaGauge={true}
                         showGold={true}
@@ -2512,6 +2491,7 @@ const App: React.FC = () => {
                         maxMana={maxMana}
                         gold={gold}
                         heroStats={heroStats}
+                        workStyle={workStyle}
                         showHasteGauge={true}
                         showManaGauge={true}
                         showGold={true}

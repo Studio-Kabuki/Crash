@@ -1,8 +1,8 @@
 
 import React, { useState, useEffect } from 'react';
 import { Skill, CardProps } from '../types';
-import { Swords, Zap, Ban, Wand2, Hexagon } from 'lucide-react';
-import { calculateHaste, calculateEffectDamage } from '../utils/skillCalculations';
+import { Zap, Ban, Hexagon, Users } from 'lucide-react';
+import { calculateDamage } from '../utils/skillCalculations';
 
 export const Card: React.FC<CardProps> = ({
   skill,
@@ -11,13 +11,9 @@ export const Card: React.FC<CardProps> = ({
   mana,
   currentHaste,
   heroStats,
-  physicalMultiplier = 1,
-  magicMultiplier = 1,
+  damageMultiplier = 1,
   effectsDisabled = false,
-  lastCardWasPhysical = false,
-  deckSlashCount = 0,
-  enemyDamageTaken = 0,
-  physicalHasteReduction = 0
+  enemyDamageTaken = 0
 }) => {
   const [imgSrc, setImgSrc] = useState<string>(skill.icon);
   const [hasError, setHasError] = useState<boolean>(false);
@@ -28,87 +24,38 @@ export const Card: React.FC<CardProps> = ({
     setHasError(false);
   }, [skill.icon]);
 
-  // ダメージ計算（基礎ダメージも倍率適用）
-  const baseDamage = skill.baseDamage || 0;
-  // マイナス係数は「係数なし」として扱う（ベースダメージのみ攻撃）
-  const hasPhysicalRatio = skill.adRatio > 0;
-  const hasMagicRatio = skill.apRatio > 0;
-  const isPhysicalNegative = skill.adRatio < 0;
-  const isMagicNegative = skill.apRatio < 0;
-  // 表示用：マイナス係数があるかどうか
-  const hasNegativeRatio = isPhysicalNegative || isMagicNegative;
-
-  // 基礎ダメージの倍率適用
-  let scaledBaseDamage = 0;
-  if (hasPhysicalRatio && hasMagicRatio) {
-    // ミックス: 半分ずつ割り振って計算
-    const halfBase = baseDamage / 2;
-    scaledBaseDamage = Math.floor(halfBase * physicalMultiplier + halfBase * magicMultiplier);
-  } else if (hasPhysicalRatio) {
-    // 物理のみ: 物理倍率を適用
-    scaledBaseDamage = Math.floor(baseDamage * physicalMultiplier);
-  } else if (hasMagicRatio) {
-    // 魔法のみ: 魔法倍率を適用
-    scaledBaseDamage = Math.floor(baseDamage * magicMultiplier);
-  } else {
-    // 係数なし: 倍率の影響を受けない（真のダメージ）
-    scaledBaseDamage = baseDamage;
-  }
-
-  // マイナス係数の場合はベースダメージから差し引く
-  const physicalDamage = Math.floor(heroStats.ad * skill.adRatio / 100 * physicalMultiplier);
-  const magicDamage = Math.floor(heroStats.ap * skill.apRatio / 100 * magicMultiplier);
-  // ダメージは0以下にならない
-  const totalDamage = Math.max(0, scaledBaseDamage + physicalDamage + magicDamage);
-
-  const hasBaseDamage = baseDamage > 0;
-  // マイナス係数のみの場合もベースダメージのみ扱い
-  const hasOnlyBaseDamage = hasBaseDamage && !hasPhysicalRatio && !hasMagicRatio;
-  const hasMixedDamage = hasPhysicalRatio && hasMagicRatio;  // 物理+魔法の混合
-
-  // 能力ダメージの計算（共通関数を使用）
-  const { effectDamage, effectDamageType } = calculateEffectDamage({
+  // ダメージ計算
+  const totalDamage = calculateDamage({
     skill,
-    deckSlashCount,
-    enemyDamageTaken,
-    effectsDisabled
+    heroStats,
+    damageMultiplier
   });
+
+  // 能力ダメージの計算
+  let effectDamage = 0;
+  if (skill.effect && !effectsDisabled) {
+    if (skill.effect.type === 'enemy_damage_taken') {
+      const ratio = (skill.effect.params.value || 100) / 100;
+      effectDamage = Math.floor(enemyDamageTaken * ratio);
+    }
+  }
 
   // 最終ダメージ（通常ダメージ + 能力ダメージ）
   const finalDisplayDamage = totalDamage + effectDamage;
-  // 能力ダメージ系のカードは常にダメージありとして扱う
-  const hasEffectDamageSkill = skill.effect?.type === 'deck_slash_bonus' || skill.effect?.type === 'enemy_damage_taken';
-  const hasDamage = hasBaseDamage || hasPhysicalRatio || hasMagicRatio || effectDamage > 0 || hasEffectDamageSkill;
+  const hasDamage = skill.baseDamage > 0 || skill.employeeRatio !== 0 || effectDamage > 0;
 
-  const isPhysicalUp = physicalMultiplier > 1;
-  const isPhysicalDown = physicalMultiplier < 1;
-  const isMagicUp = magicMultiplier > 1;
-  const isMagicDown = magicMultiplier < 1;
-
-  // ヘイスト計算（共通関数を使用）
-  const hasteResult = calculateHaste({
-    skill,
-    physicalHasteReduction,
-    lastCardWasPhysical
-  });
-  const {
-    actualDelay,
-    isHasteReduced,
-    isPhysicalChainActive,
-    hasPhysicalChainEffect
-  } = hasteResult;
+  const actualDelay = skill.delay;
 
   const canAffordMana = mana >= skill.manaCost;
   const canAffordHaste = currentHaste >= actualDelay;
   const canAfford = canAffordMana && canAffordHaste;
 
-  // レアリティに応じた枠色
+  // ワークスタイル属性に応じた枠色
   const getRarityBorderColor = () => {
     if (!canAfford) return 'border-red-900';
-    if (skill.rarity === 'SSR') return 'border-yellow-500';
-    if (skill.rarity === 'SR') return 'border-orange-400';
-    if (skill.rarity === 'R') return 'border-purple-500';
-    return 'border-slate-600';
+    if (skill.rarity === 'BLACK') return 'border-red-500';
+    if (skill.rarity === 'WHITE') return 'border-green-500';
+    return 'border-slate-500';  // NEUTRAL
   };
 
   const handleImgError = () => {
@@ -138,34 +85,22 @@ export const Card: React.FC<CardProps> = ({
         overflow-hidden
       `}
     >
-      {/* ヘッダーライン: ヘイスト | マナ */}
+      {/* ヘッダーライン: ヘイスト | 士気 */}
       <div className={`
         w-full flex items-center justify-between px-2 py-1 border-b z-20
         ${skill.cardType === 'support' ? 'bg-teal-900/50 border-teal-700' : 'bg-slate-800 border-slate-700'}
       `}>
         {/* ヘイスト（DELAY） */}
         <div className={`flex items-center gap-1 px-1.5 py-0.5 rounded ${
-          isPhysicalChainActive || isHasteReduced
-            ? 'bg-green-500 text-white'
-            : actualDelay > 0
-              ? 'bg-white text-slate-900'
-              : 'text-slate-400'
+          actualDelay > 0
+            ? 'bg-white text-slate-900'
+            : 'text-slate-400'
         }`}>
           <Zap className="w-4 h-4" />
-          <span className="text-[0.65rem] font-black">
-            {/* いずれかの削減が適用されている場合 */}
-            {(isPhysicalChainActive || isHasteReduced) ? (
-              <><s className="text-green-200">{skill.delay}</s> {actualDelay}</>
-            ) : hasPhysicalChainEffect ? (
-              /* physical_chain_haste効果あり、だが前が物理じゃない場合は潜在的な削減値を表示 */
-              <>{skill.delay}<span className="text-[0.5rem] text-slate-500">→{Math.max(0, skill.delay - (skill.effect?.params.value || 10) - hasteResult.hasteReductionBonus)}</span></>
-            ) : (
-              actualDelay
-            )}
-          </span>
+          <span className="text-[0.65rem] font-black">{actualDelay}</span>
         </div>
 
-        {/* マナ */}
+        {/* 士気 */}
         <div className={`flex items-center gap-1 px-1.5 py-0.5 rounded ${
           skill.manaCost > 0
             ? canAfford
@@ -205,34 +140,26 @@ export const Card: React.FC<CardProps> = ({
         {skill.cardType === 'support' ? 'サポート' : 'アタック'}
       </span>
 
-      {/* ダメージ表記 */}
+      {/* 進捗表記 */}
       <div className="flex flex-col items-center gap-0.5 mt-0.5 z-10">
         {hasDamage && (
           <div className={`flex items-center gap-1 px-2 py-0.5 rounded leading-tight ${
-            effectDamageType === 'physical'
-              ? 'bg-orange-600'  // 能力ダメージ（物理）
-              : effectDamageType === 'base' && totalDamage === 0
-                ? 'bg-white'  // 能力ダメージのみ（ベース）
-                : hasOnlyBaseDamage
-                  ? 'bg-white'  // 基礎ダメージのみは白背景
-                  : hasMixedDamage
-                    ? 'bg-gradient-to-br from-orange-600 to-cyan-500'  // 物理+魔法は斜めグラデ
-                    : hasMagicRatio
-                      ? (isMagicDown ? 'bg-red-600' : 'bg-cyan-600')  // 魔法のみ
-                      : (isPhysicalDown ? 'bg-red-600' : 'bg-orange-600')  // 物理のみ
+            skill.employeeRatio < 0
+              ? 'bg-purple-600'  // マイナス係数（ハッカソンなど）
+              : skill.employeeRatio > 0
+                ? 'bg-orange-600'  // 社員数スケール
+                : 'bg-white'  // ベースダメージのみ
           }`}>
-            <span className={`text-[0.75rem] font-black ${(hasOnlyBaseDamage || (effectDamageType === 'base' && totalDamage === 0)) ? 'text-slate-900' : 'text-white'}`}>
+            <span className={`text-[0.75rem] font-black ${skill.employeeRatio === 0 ? 'text-slate-900' : 'text-white'}`}>
               {finalDisplayDamage}
             </span>
-            <span className={`text-[0.5rem] font-bold ${(hasOnlyBaseDamage || (effectDamageType === 'base' && totalDamage === 0)) ? 'text-slate-700' : 'text-white'}`}>ダメージ</span>
-            {(isPhysicalUp || isMagicUp) && <span className="text-[0.5rem] text-green-300 font-black">↑</span>}
-            {(isPhysicalDown || isMagicDown) && <span className={`text-[0.5rem] font-black ${hasOnlyBaseDamage ? 'text-red-600' : 'text-white'}`}>↓</span>}
+            <span className={`text-[0.5rem] font-bold ${skill.employeeRatio === 0 ? 'text-slate-700' : 'text-white'}`}>進捗</span>
           </div>
         )}
         {!hasDamage && (
           <div className="flex items-center gap-1 px-2 py-0.5 rounded border border-slate-600 bg-transparent leading-tight">
             <span className="text-[0.75rem] font-black text-slate-500">-</span>
-            <span className="text-[0.5rem] font-bold text-slate-500">ダメージなし</span>
+            <span className="text-[0.5rem] font-bold text-slate-500">進捗なし</span>
           </div>
         )}
       </div>
@@ -243,40 +170,20 @@ export const Card: React.FC<CardProps> = ({
           {hasDamage && (
             <div className="flex items-center gap-0.5 text-[0.6rem] font-bold text-slate-400 mb-0.5">
               <span>=</span>
-              {hasBaseDamage && <span>{baseDamage}</span>}
-              {/* プラス係数 */}
-              {hasBaseDamage && hasPhysicalRatio && <span>+</span>}
-              {hasPhysicalRatio && (
-                <>
-                  <Swords className="w-3 h-3 text-orange-400" />
-                  <span className="text-orange-400">×{(skill.adRatio / 100).toFixed(1)}</span>
-                </>
+              {skill.baseDamage > 0 && <span>{skill.baseDamage}</span>}
+              {skill.baseDamage > 0 && skill.employeeRatio !== 0 && (
+                <span>{skill.employeeRatio > 0 ? '+' : ''}</span>
               )}
-              {hasPhysicalRatio && hasMagicRatio && <span>+</span>}
-              {hasMagicRatio && (
+              {skill.employeeRatio !== 0 && (
                 <>
-                  <Wand2 className="w-3 h-3 text-cyan-400" />
-                  <span className="text-cyan-400">×{(skill.apRatio / 100).toFixed(1)}</span>
-                </>
-              )}
-              {/* マイナス係数（減算として表示） */}
-              {isPhysicalNegative && (
-                <>
-                  <Swords className="w-3 h-3 text-red-400" />
-                  <span className="text-red-400">×{(skill.adRatio / 100).toFixed(1)}</span>
-                </>
-              )}
-              {isMagicNegative && (
-                <>
-                  <Wand2 className="w-3 h-3 text-red-400" />
-                  <span className="text-red-400">×{(skill.apRatio / 100).toFixed(1)}</span>
+                  <Users className="w-3 h-3 text-amber-400" />
+                  <span className={skill.employeeRatio < 0 ? 'text-purple-400' : 'text-amber-400'}>
+                    ×{(skill.employeeRatio / 100).toFixed(1)}
+                  </span>
                 </>
               )}
               {/* 能力ダメージ */}
-              {effectDamage > 0 && (hasBaseDamage || hasPhysicalRatio || hasMagicRatio || isPhysicalNegative || isMagicNegative) && <span>+</span>}
-              {skill.effect?.type === 'deck_slash_bonus' && (
-                <span className="text-purple-400">スラ{deckSlashCount}×{skill.effect.params.value}</span>
-              )}
+              {effectDamage > 0 && (skill.baseDamage > 0 || skill.employeeRatio !== 0) && <span>+</span>}
               {skill.effect?.type === 'enemy_damage_taken' && (
                 <span className="text-indigo-400">減{enemyDamageTaken}×{(skill.effect.params.value || 100) / 100}={effectDamage}</span>
               )}
@@ -300,7 +207,7 @@ export const Card: React.FC<CardProps> = ({
         <div className="absolute inset-0 bg-red-950/20 backdrop-blur-[1px] flex flex-col items-center justify-center pointer-events-none">
           <Ban className="text-red-500 opacity-50 mb-1" size={32} />
           <span className="text-[0.625rem] text-red-400 font-bold">
-            {!canAffordHaste ? 'HASTE不足' : 'MANA不足'}
+            {!canAffordHaste ? 'HASTE不足' : '士気不足'}
           </span>
         </div>
       )}

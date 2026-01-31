@@ -11,13 +11,13 @@ interface RawSkill {
   flavorText: string;    // 目立たない補足テキスト
   cardType: string;
   baseDamage: number;
-  adRatio: number;
-  apRatio: number;
+  employeeRatio: number;  // 社員数比率（%）
   manaCost: number;
   delay: number;
+  workStyleChange: number;  // ホワイト/ブラック度変化
   effectType: string;
   effectTrigger: string;
-  effectParams: string;  // JSON文字列
+  effectParams: string;  // key=value;key=value 形式
   color: string;
   borderColor: string;
   heightClass: string;
@@ -45,12 +45,11 @@ interface RawEnemy {
 }
 
 interface RawHero {
-  ad: number;
-  ap: number;
-  sp: number;
-  mp: number;
-  mana: number;
-  life: number;
+  employees: number;  // 社員数
+  sp: number;         // ヘイスト
+  mp: number;         // 士気
+  mana: number;       // 初期士気
+  life: number;       // ライフ
 }
 
 interface RawPassive {
@@ -63,7 +62,6 @@ interface RawPassive {
   value: number;
   value2: number;
   rarity: string;
-  targetCategory: string;
 }
 
 interface RawTrait {
@@ -108,7 +106,7 @@ export interface BuffDefinition {
   icon: string;
   description: string;
   defaultValue: number;
-  stat?: 'ad' | 'ap' | 'sp' | 'mp';
+  stat?: 'employees' | 'sp' | 'mp';
 }
 
 // ID生成
@@ -163,10 +161,10 @@ function convertToSkill(raw: RawSkill): Omit<Skill, 'id'> {
     icon: raw.icon,
     cardType: (raw.cardType || 'attack') as CardType,
     baseDamage: raw.baseDamage || 0,
-    adRatio: raw.adRatio,
-    apRatio: raw.apRatio,
+    employeeRatio: raw.employeeRatio || 0,
     manaCost: raw.manaCost,
     delay: raw.delay,
+    workStyleChange: raw.workStyleChange || 0,
     color: raw.color,
     borderColor: raw.borderColor,
     heightClass: raw.heightClass,
@@ -195,8 +193,7 @@ function convertToEnemy(raw: RawEnemy, traits: Record<string, BattleEvent>): Ene
 function convertToHeroData(raw: RawHero): HeroInitialData {
   return {
     stats: {
-      ad: raw.ad,
-      ap: raw.ap,
+      employees: raw.employees,
       sp: raw.sp,
       mp: raw.mp
     },
@@ -215,8 +212,7 @@ function convertToPassive(raw: RawPassive): PassiveEffect {
     type: raw.type as PassiveEffect['type'],
     value: raw.value,
     rarity: raw.rarity as Rarity,
-    ...(raw.value2 ? { value2: raw.value2 } : {}),
-    ...(raw.targetCategory ? { targetCategory: raw.targetCategory } : {})
+    ...(raw.value2 ? { value2: raw.value2 } : {})
   };
 }
 
@@ -262,9 +258,9 @@ export async function loadGameData(): Promise<GameData> {
 
   const allSkills = enabledSkills.map(convertToSkill);
   const heroData = rawHeroes.length > 0 ? convertToHeroData(rawHeroes[0]) : {
-    stats: { ad: 30, ap: 10, sp: 30, mp: 50 },
+    stats: { employees: 10, sp: 30, mp: 50 },
     mana: 50,
-    life: 2
+    life: 3
   };
   const passivePool = enabledPassives.map(convertToPassive);
 
@@ -300,7 +296,7 @@ export async function loadGameData(): Promise<GameData> {
       icon: raw.icon,
       description: raw.description,
       defaultValue: raw.defaultValue,
-      stat: raw.stat as 'ad' | 'ap' | 'sp' | 'mp' | undefined
+      stat: raw.stat as 'employees' | 'sp' | 'mp' | undefined
     };
   });
 
