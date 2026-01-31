@@ -106,9 +106,12 @@ export function parseTypedCSV<T>(text: string): T[] {
  */
 export async function loadCSV<T>(path: string): Promise<T[]> {
   try {
-    const response = await fetch(path);
+    // GitHub Pages等でbaseパスがある場合に対応
+    const basePath = import.meta.env.BASE_URL || '/';
+    const fullPath = path.startsWith('/') ? `${basePath}${path.slice(1)}` : `${basePath}${path}`;
+    const response = await fetch(fullPath);
     if (!response.ok) {
-      throw new Error(`Failed to load CSV: ${path}`);
+      throw new Error(`Failed to load CSV: ${fullPath}`);
     }
     const text = await response.text();
     return parseTypedCSV<T>(text);
