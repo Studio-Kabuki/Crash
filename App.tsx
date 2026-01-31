@@ -16,6 +16,20 @@ import {
   ZapOff, Star, BookOpen, Settings, RefreshCw, Trash2, Trophy, Clock, Users, Flame
 } from 'lucide-react';
 
+// ダメージ量に応じたスタイルクラスを返す関数
+const getDamageStyle = (value: number): { className: string; sizeClass: string } => {
+  if (value >= 100000) {
+    return { className: 'damage-epic', sizeClass: 'text-5xl md:text-7xl' };
+  }
+  if (value >= 10000) {
+    return { className: 'damage-legendary', sizeClass: 'text-4xl md:text-6xl' };
+  }
+  if (value >= 1000) {
+    return { className: 'damage-rare', sizeClass: 'text-3xl md:text-5xl' };
+  }
+  return { className: 'damage-normal', sizeClass: 'text-2xl md:text-4xl' };
+};
+
 // フォールバック付き画像コンポーネント
 const SafeImage: React.FC<{ src: string; alt: string; className?: string }> = ({ src, alt, className }) => {
   const [imgSrc, setImgSrc] = useState(src);
@@ -1185,12 +1199,14 @@ const App: React.FC = () => {
         let didBurn = false;
         if (workStyle > 0) {
           const blackDegree = workStyle;  // 0〜100
-          const loseChance = blackDegree * 0.3 / 100;  // 0〜0.3 (0〜30%)
+          const loseChance = 0.2 * Math.pow(0.01 * blackDegree, 2);  // 0〜0.2 (100で20%)
           if (Math.random() < loseChance) {
             didBurn = true;
             // 炎上演出を表示
             setIsBurning(true);
             setTimeout(() => setIsBurning(false), 2500);
+            // ブラック度を半分にする
+            setWorkStyle(prev => Math.floor(prev / 2));
           }
         }
 
@@ -1472,7 +1488,83 @@ const App: React.FC = () => {
           0% { transform: translateY(0); opacity: 1; }
           100% { transform: translateY(-70px); opacity: 0; }
         }
+        @keyframes floatUpFadeEpic {
+          0% { transform: translateY(0) scale(1.2); opacity: 1; }
+          100% { transform: translateY(-90px) scale(0.8); opacity: 0; }
+        }
+        @keyframes goldGlow {
+          0%, 100% { text-shadow: 0 0 10px rgba(251, 191, 36, 0.5), 0 0 20px rgba(251, 191, 36, 0.3); }
+          50% { text-shadow: 0 0 20px rgba(251, 191, 36, 0.8), 0 0 40px rgba(251, 191, 36, 0.5), 0 0 60px rgba(251, 191, 36, 0.3); }
+        }
+        @keyframes rainbowShine {
+          0% { filter: hue-rotate(0deg) drop-shadow(0 0 10px gold); }
+          100% { filter: hue-rotate(360deg) drop-shadow(0 0 10px gold); }
+        }
+        @keyframes damageShake {
+          0%, 100% { transform: translateX(0); }
+          25% { transform: translateX(-4px); }
+          75% { transform: translateX(4px); }
+        }
+        @keyframes damagePop {
+          0% { transform: scale(1.5); }
+          50% { transform: scale(1.8); }
+          100% { transform: scale(1); }
+        }
         .damage-pop { animation: floatUpFade 1s ease-out forwards; }
+
+        /* 通常ダメージ（金色+背景） */
+        .damage-normal {
+          color: #fbbf24;
+          -webkit-text-stroke: 3px #78350f;
+          paint-order: stroke fill;
+          text-shadow: 0 0 15px rgba(251, 191, 36, 0.8), 0 4px 8px rgba(0, 0, 0, 0.9);
+          background: radial-gradient(ellipse at center, rgba(251, 191, 36, 0.3) 0%, transparent 70%);
+          padding: 0.5rem 1rem;
+          border-radius: 1rem;
+          animation: floatUpFade 1s ease-out forwards;
+        }
+
+        /* レアダメージ（金色+光る+シェイク+背景） */
+        .damage-rare {
+          color: #fcd34d;
+          -webkit-text-stroke: 4px #92400e;
+          paint-order: stroke fill;
+          text-shadow: 0 0 20px rgba(252, 211, 77, 1), 0 0 40px rgba(245, 158, 11, 0.8), 0 4px 8px rgba(0, 0, 0, 0.9);
+          background: radial-gradient(ellipse at center, rgba(245, 158, 11, 0.4) 0%, transparent 70%);
+          padding: 0.5rem 1rem;
+          border-radius: 1rem;
+          animation: floatUpFade 1s ease-out forwards, goldGlow 0.3s ease-in-out 3, damageShake 0.1s ease-in-out 3;
+        }
+
+        /* レジェンダリーダメージ（虹色+シェイク+背景） */
+        .damage-legendary {
+          background: linear-gradient(90deg, #ff6b6b, #feca57, #48dbfb, #ff9ff3, #54a0ff, #5f27cd);
+          background-size: 200% 100%;
+          -webkit-background-clip: text;
+          -webkit-text-fill-color: transparent;
+          background-clip: text;
+          -webkit-text-stroke: 2px rgba(255, 255, 255, 0.3);
+          paint-order: stroke fill;
+          filter: drop-shadow(0 0 15px rgba(255, 255, 255, 0.9)) drop-shadow(0 4px 8px rgba(0, 0, 0, 0.9));
+          padding: 0.5rem 1rem;
+          border-radius: 1rem;
+          animation: floatUpFade 1.1s ease-out forwards, rainbowShine 0.5s linear infinite, damageShake 0.1s ease-in-out 5;
+        }
+
+        /* エピックダメージ（虹色+強シェイク+拡大+背景） */
+        .damage-epic {
+          background: linear-gradient(90deg, #ff0000, #ff7f00, #ffff00, #00ff00, #00ffff, #0000ff, #8b00ff);
+          background-size: 200% 100%;
+          -webkit-background-clip: text;
+          -webkit-text-fill-color: transparent;
+          background-clip: text;
+          -webkit-text-stroke: 3px rgba(255, 255, 255, 0.4);
+          paint-order: stroke fill;
+          filter: drop-shadow(0 0 20px gold) drop-shadow(0 0 40px rgba(255, 255, 255, 1)) drop-shadow(0 4px 8px rgba(0, 0, 0, 0.9));
+          padding: 0.5rem 1.5rem;
+          border-radius: 1rem;
+          animation: floatUpFadeEpic 1.3s ease-out forwards, rainbowShine 0.3s linear infinite, damageShake 0.05s ease-in-out 10, damagePop 0.3s ease-out;
+        }
         @keyframes cardEntry {
           0% { transform: scale(0.8) translateY(20px); opacity: 0; }
           100% { transform: scale(1) translateY(0); opacity: 1; }
@@ -2299,9 +2391,24 @@ const App: React.FC = () => {
                           </div>
                         )}
 
-                        {floatingDamages.map(dmg => (
-                          <div key={dmg.id} className={`absolute z-50 pointer-events-none damage-pop font-black drop-shadow-[0_0_10px_rgba(0,0,0,0.5)] font-fantasy ${dmg.isMana ? 'text-blue-400 text-xl' : dmg.isPoison ? 'text-green-500 text-lg' : 'text-red-500 text-2xl'}`} style={{ top: '45%' }}>{dmg.isMana ? `+${dmg.value}` : `-${dmg.value}`}</div>
-                        ))}
+                        {floatingDamages.map(dmg => {
+                          const damageStyle = getDamageStyle(dmg.value);
+                          return (
+                            <div
+                              key={dmg.id}
+                              className={`absolute z-50 pointer-events-none font-black font-fantasy ${
+                                dmg.isMana
+                                  ? 'text-blue-400 text-xl damage-pop'
+                                  : dmg.isPoison
+                                    ? 'text-green-500 text-lg damage-pop'
+                                    : `${damageStyle.className} ${damageStyle.sizeClass}`
+                              }`}
+                              style={{ top: '45%' }}
+                            >
+                              {dmg.isMana ? `+${dmg.value}` : `-${dmg.value.toLocaleString()}`}
+                            </div>
+                          );
+                        })}
                         {projectile && <div className="absolute flex items-center justify-center pointer-events-none z-50"><SafeImage src={projectile.icon} alt="attack" className="w-12 h-12 md:w-20 md:h-20 object-contain projectile" /></div>}
 
                         {/* ワークスタイルイベント表示 */}

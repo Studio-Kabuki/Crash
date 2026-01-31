@@ -1,7 +1,7 @@
 deckId,deckName,skillName,count
 string,string,string,number
 default,スタンダード,大機能実装,1
-default,スタンダード,コーディング,2
-default,スタンダード,スタンドアップ,1
+default,スタンダード,コーディング,0
+default,スタンダード,青天井ガチャ,1
 default,スタンダード,集中,1
-default,スタンダード,外注手配,1
+default,スタンダード,発売延期,1
