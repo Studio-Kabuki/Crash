@@ -1124,6 +1124,9 @@ const App: React.FC = () => {
         const newUsedHaste = Math.round(usedHaste + actualDelay);
         setUsedHaste(newUsedHaste);
 
+        // カード効果で追加される締切延長を追跡（同一レンダリングサイクル内で判定に使う）
+        let addedDeadlineExtend = 0;
+
         let newStack = [...stack, skill, ...removedCards];
 
         // アタックカードの場合、すべてのchargeバフを消費して合計発動回数を計算
@@ -1318,6 +1321,7 @@ const App: React.FC = () => {
              // 締切を増やす（バフを付与してmaxHasteを増加）
              const timeValue = skill.effect.params.value || 2;
              addBuff('DEADLINE_EXTEND', timeValue);
+             addedDeadlineExtend += timeValue; // 同一レンダリングサイクル内の判定用
            }
            if (skill.effect.type === 'clear_buffs') {
              // バフ・デバフを全て解除
@@ -1421,8 +1425,9 @@ const App: React.FC = () => {
         setDeck(drawResult.newDeck);
         setStack(drawResult.newStack);
 
-        // ヘイストを使い切ったら締切判定
-        if (newUsedHaste >= maxHaste) {
+        // ヘイストを使い切ったら締切判定（カード効果で追加された締切延長を考慮）
+        const effectiveMaxHaste = maxHaste + addedDeadlineExtend;
+        if (newUsedHaste >= effectiveMaxHaste) {
              handleDeadline(finalGold);
         }
         setIsProcessingCard(false); // カード処理終了
