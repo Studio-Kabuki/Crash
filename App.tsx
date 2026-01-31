@@ -12,7 +12,7 @@ import {
   ShieldAlert, Sparkles, Ghost, Hexagon,
   CheckCircle2, Info, Award, Undo2, Layers, PlusCircle,
   X, Search, Biohazard, Heart, HeartCrack, Coffee, Coins, ShoppingCart, Check,
-  ZapOff, Star, BookOpen, Settings, RefreshCw, Trash2, Trophy
+  ZapOff, Star, BookOpen, Settings, RefreshCw, Trash2, Trophy, Clock, Users
 } from 'lucide-react';
 
 // フォールバック付き画像コンポーネント
@@ -139,6 +139,8 @@ const App: React.FC = () => {
   const [isMonsterAttacking, setIsMonsterAttacking] = useState<boolean>(false);
   const [isPlayerTakingDamage, setIsPlayerTakingDamage] = useState<boolean>(false);
   const [turnResetMessage, setTurnResetMessage] = useState<boolean>(false);
+  const [isVictoryEffect, setIsVictoryEffect] = useState<boolean>(false);
+  const [victoryQuitInfo, setVictoryQuitInfo] = useState<{ blackDegree: number; quitCount: number } | null>(null);
 
   const [projectile, setProjectile] = useState<{ icon: string; id: string } | null>(null);
   const [currentEnemy, setCurrentEnemy] = useState<Enemy>({ name: '', icon: '', baseHP: 0, minFloor: 0, maxFloor: 0, dropsAbility: 'N' });
@@ -186,6 +188,26 @@ const App: React.FC = () => {
   // 集中によるダメージ倍率（乗算: 1.4^stacks）
   const getFocusMultiplier = (): number => {
     return Math.pow(1.4, getFocusStacks());
+  };
+
+  // ガチャスタック数を取得（^1.5累乗）
+  const getGachaStacks = (): number => {
+    return playerBuffs.filter(b => b.type === 'gacha').reduce((sum, b) => sum + b.value, 0);
+  };
+
+  // ガチャによるダメージ倍率（累乗: damage^(1.5*stacks)）
+  // 注: この関数はダメージ値を受け取って累乗を適用する
+  const applyGachaPower = (damage: number): number => {
+    const stacks = getGachaStacks();
+    if (stacks === 0) return damage;
+    // 1スタックにつき1.5乗
+    // 複数スタック時は (damage^1.5)^stacks = damage^(1.5*stacks)
+    return Math.floor(Math.pow(damage, Math.pow(1.5, stacks)));
+  };
+
+  // nextCardFreeバフがあるか（デスマーチ: 次のカードディレイ0）
+  const hasNextCardFree = (): boolean => {
+    return playerBuffs.some(b => b.type === 'nextCardFree');
   };
 
   // ヘイスト（行動力）の最大値（デスマーチボーナス含む）
@@ -332,17 +354,10 @@ const App: React.FC = () => {
   };
 
   // ワークスタイルイベント判定（アタックカード使用後に呼ばれる）
+  // 現在は無効化されているが、将来使う可能性があるため残す
   const checkWorkStyleEvent = () => {
-    const isBlack = workStyle < 0;
-
-    // ブラック: |workStyle|% の確率で発動
-    // ホワイト: 50以上で (workStyle - 50)% の確率で発動
-    let triggerChance = 0;
-    if (isBlack) {
-      triggerChance = Math.abs(workStyle);
-    } else if (workStyle >= 50) {
-      triggerChance = workStyle - 50;
-    }
+    // ブラック度が高いほど発動確率が上がる
+    const triggerChance = workStyle;  // 0〜100%
 
     if (triggerChance <= 0 || Math.random() * 100 >= triggerChance) return;
 
@@ -351,10 +366,9 @@ const App: React.FC = () => {
 
     let eventTypes: string[];
     if (bugCount === 0) {
-      // バグがない時は炎上なし
-      eventTypes = isBlack ? ['bug', 'kyushoku'] : ['bug', 'yudan'];
+      eventTypes = ['bug', 'kyushoku'];
     } else {
-      eventTypes = isBlack ? ['bug', 'kyushoku', 'enjou'] : ['bug', 'yudan', 'enjou'];
+      eventTypes = ['bug', 'kyushoku', 'enjou'];
     }
 
     const selectedEvent = eventTypes[Math.floor(Math.random() * eventTypes.length)];
@@ -365,25 +379,15 @@ const App: React.FC = () => {
       setWorkStyleEvent({
         icon: '🐛',
         title: 'バグ発生！',
-        message: isBlack
-          ? '急いで書いたコードにバグが混入...'
-          : 'レビューが甘くてバグが混入...'
+        message: '急いで書いたコードにバグが混入...'
       });
     } else if (selectedEvent === 'kyushoku') {
-      // 休職追加（ブラックのみ）
+      // 休職追加
       addBuff('KYUSHOKU');
       setWorkStyleEvent({
         icon: '😵',
         title: '休職発生！',
         message: '過労で社員が体調を崩した...'
-      });
-    } else if (selectedEvent === 'yudan') {
-      // 油断追加（ホワイトのみ）
-      addBuff('YUDAN');
-      setWorkStyleEvent({
-        icon: '😌',
-        title: '油断発生！',
-        message: '余裕がありすぎて作業がゆっくりに...'
       });
     } else if (selectedEvent === 'enjou') {
       // 炎上！バグを全消費して進捗減少
@@ -432,13 +436,15 @@ const App: React.FC = () => {
   const weightedRandomSelect = <T extends { rarity: Rarity }>(items: T[], count: number): T[] => {
     const getWeight = (rarity: Rarity) => {
       const baseWeight = 3;
-      const bonus = Math.abs(workStyle) / 20;  // -100~+100 → 0~5のボーナス
+      const bonus = workStyle / 20;  // 0~100 → 0~5のボーナス
 
       if (rarity === 'BLACK') {
-        return workStyle < 0 ? baseWeight + bonus : Math.max(1, baseWeight - bonus);
+        // ブラック度が高いほどBLACKカードが出やすい
+        return baseWeight + bonus;
       }
       if (rarity === 'WHITE') {
-        return workStyle > 0 ? baseWeight + bonus : Math.max(1, baseWeight - bonus);
+        // ブラック度が高いほどWHITEカードが出にくい
+        return Math.max(1, baseWeight - bonus);
       }
       return baseWeight;  // NEUTRAL は常に均等
     };
@@ -790,12 +796,13 @@ const App: React.FC = () => {
   };
 
   const handleBattleWinFinish = (updatedDeck: Skill[]) => {
-    // 3, 7, 11... 階層撃破後にショップへ。それ以外は即次へ。
-    if (level % 4 === 3) {
-      enterShop();
-    } else {
-      nextLevel(updatedDeck);
-    }
+    // ショップ遷移は一時的に無効化（機能は残す）
+    // if (level % 4 === 3) {
+    //   enterShop();
+    // } else {
+    //   nextLevel(updatedDeck);
+    // }
+    nextLevel(updatedDeck);
   };
 
   // サポートカードの効果が無効化されているかチェック
@@ -857,6 +864,21 @@ const App: React.FC = () => {
   interface AggregatedBuff extends PlayerBuff {
     stackCount: number;
   }
+
+  // バフの優先順位（収益計算順: 加算→掛け算→乗算）
+  const getBuffPriority = (type: string): number => {
+    switch (type) {
+      case 'strength': return 1;   // 応援（加算）
+      case 'unity': return 2;      // スクラム（加算%）
+      case 'focus': return 3;      // フロー（乗算）
+      case 'gacha': return 4;      // ガチャ（累乗）
+      case 'charge': return 10;
+      case 'parry': return 11;
+      case 'nextCardFree': return 12;
+      default: return 50;
+    }
+  };
+
   const getAggregatedBuffs = (): AggregatedBuff[] => {
     const buffMap = new Map<string, AggregatedBuff>();
     playerBuffs.forEach(buff => {
@@ -869,7 +891,8 @@ const App: React.FC = () => {
         buffMap.set(key, { ...buff, stackCount: 1 });
       }
     });
-    return Array.from(buffMap.values());
+    // 優先順位でソート
+    return Array.from(buffMap.values()).sort((a, b) => getBuffPriority(a.type) - getBuffPriority(b.type));
   };
 
   // chargeバフがあるかチェック（ダメージ表示用）
@@ -928,13 +951,31 @@ const App: React.FC = () => {
     // 引数で渡された場合はそれを使う（state更新が反映されていない場合対策）
     const goldToCheck = currentGold ?? gold;
 
-    setIsMonsterAttacking(true);
-    setTimeout(() => {
-      setIsMonsterAttacking(false);
+    if (goldToCheck >= quota) {
+      // ノルマ達成！勝利エフェクト
+      setIsVictoryEffect(true);
 
-      if (goldToCheck >= quota) {
-        // ノルマ達成！クリア処理
+      // ブラック度効果: 戦闘後にブラック度%の社員が退職（計算のみ先に行う）
+      let employeesToQuit = 0;
+      const blackDegree = workStyle;
+      if (workStyle > 0) {
+        const quitRate = blackDegree / 100;  // 0〜1
+        employeesToQuit = Math.floor(heroStats.employees * quitRate);
+      }
+
+      setTimeout(() => {
+        // 勝利エフェクト完了後、退職を適用
+        if (employeesToQuit > 0) {
+          setHeroStats(prev => ({
+            ...prev,
+            employees: Math.max(1, prev.employees - employeesToQuit)
+          }));
+        }
+        // 退職情報を保存（VICTORY画面で表示用）
+        setVictoryQuitInfo(workStyle > 0 ? { blackDegree, quitCount: employeesToQuit } : null);
+
         setTimeout(() => {
+          setIsVictoryEffect(false);  // ダイアログ表示時にリセット
           const dropType = currentEnemy?.dropsAbility || 'N';
           if (dropType === 'Y') {
             // エリート: 全レアリティアビリティ→カード
@@ -953,8 +994,12 @@ const App: React.FC = () => {
             setIsCardRewardOverlayOpen(true);
           }
         }, 400);
-      } else {
-        // ノルマ未達成！ライフ減少
+      }, 1200);  // 昇天エフェクトの時間
+    } else {
+      // ノルマ未達成！攻撃エフェクト → ゲームオーバー
+      setIsMonsterAttacking(true);
+      setTimeout(() => {
+        setIsMonsterAttacking(false);
         setIsPlayerTakingDamage(true);
         const newLife = life - 1;
         setLife(newLife);
@@ -971,8 +1016,8 @@ const App: React.FC = () => {
             setTimeout(() => setTurnResetMessage(false), 1000);
           }
         }, 500);
-      }
-    }, 800);
+      }, 800);
+    }
   };
 
   // 後方互換性のためのエイリアス
@@ -1024,14 +1069,21 @@ const App: React.FC = () => {
     setHand(newHand);
     setDeck(newDeck);
 
-    // ワークスタイル変化
+    // ブラック度変化（0〜100の範囲）
     if (skill.workStyleChange) {
-      setWorkStyle(prev => Math.max(-100, Math.min(100, prev + skill.workStyleChange!)));
+      setWorkStyle(prev => Math.max(0, Math.min(100, prev + skill.workStyleChange)));
     }
 
     // ディレイ計算（油断デバフ: アタックカードのヘイスト+5/stack）
     const yudanPenalty = skill.cardType === 'attack' ? getYudanStacks() * 5 : 0;
-    const actualDelay = skill.delay + yudanPenalty;
+    // nextCardFreeバフがある場合はディレイ0（デスマーチ効果）
+    const isNextCardFree = hasNextCardFree();
+    const actualDelay = isNextCardFree ? 0 : skill.delay + yudanPenalty;
+
+    // nextCardFreeバフを消費
+    if (isNextCardFree) {
+      setPlayerBuffs(prev => prev.filter(b => b.type !== 'nextCardFree'));
+    }
 
     setTimeout(() => {
         setIsMonsterShaking(true);
@@ -1083,20 +1135,7 @@ const App: React.FC = () => {
           });
         }
 
-        // 筋力バフを10減少させる（0以下になったら削除）
-        setPlayerBuffs(prev => {
-          const strengthBuff = prev.find(b => b.type === 'strength');
-          if (strengthBuff) {
-            const newValue = strengthBuff.value - 10;
-            if (newValue <= 0) {
-              return prev.filter(b => b.type !== 'strength');
-            }
-            return prev.map(b =>
-              b.type === 'strength' ? { ...b, value: newValue } : b
-            );
-          }
-          return prev;
-        });
+        // 応援バフは戦闘中永続（減少しない）
 
         // 現在のカードのダメージを直接計算（休職などで社員数が変わっても過去カードに影響しない）
         const currentCardDamage = getSkillBaseDamage(skill);
@@ -1107,8 +1146,10 @@ const App: React.FC = () => {
         damageDealt += removedCardsDamage;
 
         // バフによるダメージ倍率を適用
-        // 計算式: (ベース + 社員数ダメージ) × 一致団結(加算) × 集中(乗算)
+        // 計算式: (ベース + 社員数ダメージ) × 一致団結(加算) × 集中(乗算) → ガチャ(累乗)
         damageDealt = Math.floor(damageDealt * getUnityMultiplier() * getFocusMultiplier());
+        // ガチャバフ: 最終ダメージを1.5乗（スタック数分適用）
+        damageDealt = applyGachaPower(damageDealt);
 
         const newTotalPower = currentComboPower + damageDealt;
         const poisonDmg = isEnemyPoisoned ? 30 : 0;
@@ -1134,8 +1175,23 @@ const App: React.FC = () => {
         const newProgress = progress + actualDamage;
         setProgress(newProgress);
         // 稼いだ分だけゴールド（売上）も増える
-        const newGold = gold + actualDamage;
-        setGold(newGold);
+        let finalGold = gold + actualDamage;
+
+        // ブラック度効果: カード使用後に確率で全財産喪失
+        // ブラック度100で30%の確率
+        if (workStyle > 0) {
+          const blackDegree = workStyle;  // 0〜100
+          const loseChance = blackDegree * 0.3 / 100;  // 0〜0.3 (0〜30%)
+          if (Math.random() < loseChance) {
+            finalGold = 0;
+            // 炎上エフェクト表示用
+            const burnId = generateId();
+            setFloatingDamages(prev => [...prev, { id: burnId, value: -gold, isPoison: true }]);
+            setTimeout(() => setFloatingDamages(p => p.filter(d => d.id !== burnId)), 1500);
+          }
+        }
+
+        setGold(finalGold);
         setCurrentComboPower(newTotalPower);
         setStack(newStack);
 
@@ -1233,6 +1289,18 @@ const App: React.FC = () => {
              // パリィバフを付与
              addBuff('PARRY', 1);
            }
+           if (skill.effect.type === 'add_time') {
+             // 締切を増やす（usedHasteを減らすことで残り時間を増やす）
+             const timeValue = skill.effect.params.value || 2;
+             setUsedHaste(prev => Math.max(0, prev - timeValue));
+           }
+           if (skill.effect.type === 'cost_gold_percent') {
+             // ノルマの%分ゴールドを引く
+             const percentValue = skill.effect.params.value || 20;
+             const quota = currentEnemy.baseHP;
+             const costAmount = Math.floor(quota * percentValue / 100);
+             setGold(prev => Math.max(0, prev - costAmount));
+           }
            if (skill.effect.type === 'permanent_power_up') {
              // 倍率を増加（使用するたび+30%）
              const multiplierIncrease = (skill.effect.params.value || 30) / 100;
@@ -1324,7 +1392,7 @@ const App: React.FC = () => {
 
         // ヘイストを使い切ったら締切判定
         if (newUsedHaste >= maxHaste) {
-             handleDeadline(newGold);
+             handleDeadline(finalGold);
         }
         setIsProcessingCard(false); // カード処理終了
     }, 450);
@@ -1398,6 +1466,37 @@ const App: React.FC = () => {
         .deck-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px 8px; justify-items: center; }
         @keyframes redFlash { 0% { opacity: 0; } 20% { opacity: 0.6; } 100% { opacity: 0; } }
         .damage-flash { animation: redFlash 0.5s ease-out forwards; }
+
+        @keyframes victoryAscend {
+          0% { transform: translateY(0) scale(1); opacity: 1; filter: brightness(1); }
+          30% { transform: translateY(-20px) scale(1.1); opacity: 1; filter: brightness(1.5); }
+          100% { transform: translateY(-100px) scale(0.5); opacity: 0; filter: brightness(2); }
+        }
+        .victory-ascend { animation: victoryAscend 1.2s ease-in-out forwards; }
+
+        @keyframes victoryTextPop {
+          0% { transform: scale(0); opacity: 0; }
+          50% { transform: scale(1.2); opacity: 1; }
+          100% { transform: scale(1); opacity: 1; }
+        }
+        .victory-text { animation: victoryTextPop 0.6s ease-out forwards; }
+
+        @keyframes victoryParticle {
+          0% { transform: translateY(0) scale(1); opacity: 1; }
+          100% { transform: translateY(-120px) scale(0.5); opacity: 0; }
+        }
+        .victory-particles {
+          position: absolute;
+          display: flex;
+          gap: 8px;
+          flex-wrap: wrap;
+          justify-content: center;
+          width: 200px;
+        }
+        .victory-particle {
+          font-size: 24px;
+          animation: victoryParticle 1.5s ease-out forwards;
+        }
       `}</style>
 
       {isPlayerTakingDamage && <div className="fixed inset-0 z-[100] bg-red-600 pointer-events-none damage-flash mix-blend-multiply"></div>}
@@ -1715,10 +1814,10 @@ const App: React.FC = () => {
               ))}
             </div>
             <button
-              onClick={() => { handleBattleWinFinish(permanentDeck); setIsCardRewardOverlayOpen(false); }}
+              onClick={() => setIsCardRewardOverlayOpen(false)}
               className="w-full bg-slate-800 hover:bg-slate-700 py-3 rounded-xl font-bold uppercase tracking-widest text-sm text-slate-400 hover:text-white transition-all"
             >
-              スキップして進む
+              閉じる
             </button>
           </div>
         </div>
@@ -1755,10 +1854,10 @@ const App: React.FC = () => {
               ))}
             </div>
             <button
-              onClick={() => { setIsAbilityRewardOverlayOpen(false); handleBattleWinFinish(permanentDeck); }}
+              onClick={() => setIsAbilityRewardOverlayOpen(false)}
               className="w-full bg-slate-800 hover:bg-slate-700 py-3 rounded-xl font-bold uppercase tracking-widest text-sm text-slate-400 hover:text-white transition-all"
             >
-              スキップして進む
+              閉じる
             </button>
           </div>
         </div>
@@ -2105,9 +2204,23 @@ const App: React.FC = () => {
                           </button>
                         </div>
 
-                        <div className={`w-32 h-32 md:w-52 md:h-52 select-none pointer-events-none drop-shadow-[0_10px_30px_rgba(0,0,0,0.5)] flex items-center justify-center ${isMonsterShaking ? 'monster-shake brightness-150 scale-110' : ''} ${isMonsterAttacking ? 'monster-attack z-50' : 'monster-idle'}`}>
+                        <div className={`w-32 h-32 md:w-52 md:h-52 select-none pointer-events-none drop-shadow-[0_10px_30px_rgba(0,0,0,0.5)] flex items-center justify-center ${isMonsterShaking ? 'monster-shake brightness-150 scale-110' : ''} ${isMonsterAttacking ? 'monster-attack z-50' : ''} ${isVictoryEffect ? 'victory-ascend' : 'monster-idle'}`}>
                             <SafeImage src={currentEnemy.icon} alt={currentEnemy.name} className="w-full h-full object-contain" />
                         </div>
+
+                        {/* 勝利エフェクト */}
+                        {isVictoryEffect && (
+                          <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-50">
+                            <div className="victory-particles">
+                              {[...Array(12)].map((_, i) => (
+                                <div key={i} className="victory-particle" style={{ animationDelay: `${i * 0.1}s` }}>✨</div>
+                              ))}
+                            </div>
+                            <div className="text-4xl md:text-6xl font-black text-yellow-400 drop-shadow-[0_0_20px_rgba(234,179,8,0.8)] victory-text">
+                              CLEAR!
+                            </div>
+                          </div>
+                        )}
 
                         {/* ゴールドvsノルマゲージ（敵アイコンの下） */}
                         <div className="w-40 md:w-64 h-4 md:h-5 bg-slate-950 rounded border border-slate-800 shadow-2xl overflow-hidden relative mt-1">
@@ -2172,13 +2285,34 @@ const App: React.FC = () => {
                         </div>
 
                         {/* 勝利アイコン */}
-                        <div className="relative mb-6">
-                            <div className="w-32 h-32 bg-gradient-to-b from-green-900/50 to-emerald-950/50 rounded-full flex items-center justify-center border-4 border-green-600/50 shadow-[0_0_40px_rgba(34,197,94,0.3)]">
-                                <Award className="text-green-400" size={64} />
+                        <div className="relative mb-4">
+                            <div className="w-28 h-28 bg-gradient-to-b from-green-900/50 to-emerald-950/50 rounded-full flex items-center justify-center border-4 border-green-600/50 shadow-[0_0_40px_rgba(34,197,94,0.3)]">
+                                <Award className="text-green-400" size={56} />
                             </div>
                             <div className="absolute -bottom-2 left-1/2 -translate-x-1/2 bg-green-600 px-4 py-1 rounded-full">
                                 <span className="text-xs font-black text-white uppercase tracking-widest">Victory!</span>
                             </div>
+                        </div>
+
+                        {/* 退職情報 */}
+                        {victoryQuitInfo && victoryQuitInfo.quitCount > 0 && (
+                          <div className="mb-4 px-4 py-2 bg-red-900/50 border border-red-600/50 rounded-lg text-center">
+                            <p className="text-sm text-red-300">
+                              😈 ブラック度により、社員の{victoryQuitInfo.blackDegree}%（{victoryQuitInfo.quitCount}人）が退職
+                            </p>
+                          </div>
+                        )}
+
+                        {/* プレイヤー情報（社員数・ゴールド） */}
+                        <div className="flex items-center gap-4 mb-4 px-4 py-2 bg-slate-800/50 rounded-lg">
+                          <div className="flex items-center gap-2">
+                            <Users className="w-4 h-4 text-amber-400" />
+                            <span className="text-sm font-bold text-amber-300">{heroStats.employees}人</span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <Coins className="w-4 h-4 text-yellow-400" />
+                            <span className="text-sm font-bold text-yellow-300">{gold}G</span>
+                          </div>
                         </div>
 
                         {/* ボタン群 */}
@@ -2193,7 +2327,7 @@ const App: React.FC = () => {
                                 onClick={() => handleBattleWinFinish(permanentDeck)}
                                 className="flex items-center justify-center gap-2 px-6 py-3 bg-slate-700 hover:bg-slate-600 rounded-xl text-sm font-black text-slate-200 uppercase tracking-widest transition-all"
                             >
-                                <ArrowRight size={18} /> スキップして進む
+                                <ArrowRight size={18} /> 次へ進む
                             </button>
                         </div>
                     </div>
@@ -2216,13 +2350,34 @@ const App: React.FC = () => {
                         </div>
 
                         {/* 勝利アイコン（ザコ用） */}
-                        <div className="relative mb-6">
-                            <div className="w-32 h-32 bg-gradient-to-b from-green-900/50 to-emerald-950/50 rounded-full flex items-center justify-center border-4 border-green-600/50 shadow-[0_0_40px_rgba(34,197,94,0.3)]">
-                                <Award className="text-green-400" size={64} />
+                        <div className="relative mb-4">
+                            <div className="w-28 h-28 bg-gradient-to-b from-green-900/50 to-emerald-950/50 rounded-full flex items-center justify-center border-4 border-green-600/50 shadow-[0_0_40px_rgba(34,197,94,0.3)]">
+                                <Award className="text-green-400" size={56} />
                             </div>
                             <div className="absolute -bottom-2 left-1/2 -translate-x-1/2 bg-green-600 px-4 py-1 rounded-full">
                                 <span className="text-xs font-black text-white uppercase tracking-widest">Victory!</span>
                             </div>
+                        </div>
+
+                        {/* 退職情報 */}
+                        {victoryQuitInfo && victoryQuitInfo.quitCount > 0 && (
+                          <div className="mb-4 px-4 py-2 bg-red-900/50 border border-red-600/50 rounded-lg text-center">
+                            <p className="text-sm text-red-300">
+                              😈 ブラック度により、社員の{victoryQuitInfo.blackDegree}%（{victoryQuitInfo.quitCount}人）が退職
+                            </p>
+                          </div>
+                        )}
+
+                        {/* プレイヤー情報（社員数・ゴールド） */}
+                        <div className="flex items-center gap-4 mb-4 px-4 py-2 bg-slate-800/50 rounded-lg">
+                          <div className="flex items-center gap-2">
+                            <Users className="w-4 h-4 text-amber-400" />
+                            <span className="text-sm font-bold text-amber-300">{heroStats.employees}人</span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <Coins className="w-4 h-4 text-yellow-400" />
+                            <span className="text-sm font-bold text-yellow-300">{gold}G</span>
+                          </div>
                         </div>
 
                         {/* ボタン群 */}
@@ -2237,7 +2392,7 @@ const App: React.FC = () => {
                                 onClick={() => handleBattleWinFinish(permanentDeck)}
                                 className="flex items-center justify-center gap-2 px-6 py-3 bg-slate-700 hover:bg-slate-600 rounded-xl text-sm font-black text-slate-200 uppercase tracking-widest transition-all"
                             >
-                                <ArrowRight size={18} /> スキップして進む
+                                <ArrowRight size={18} /> 次へ進む
                             </button>
                         </div>
                     </div>
@@ -2260,13 +2415,34 @@ const App: React.FC = () => {
                         </div>
 
                         {/* エリート勝利アイコン */}
-                        <div className="relative mb-6">
-                            <div className="w-32 h-32 bg-gradient-to-b from-indigo-900/50 to-purple-950/50 rounded-full flex items-center justify-center border-4 border-indigo-600/50 shadow-[0_0_40px_rgba(99,102,241,0.3)]">
-                                <Star className="text-indigo-400" size={64} />
+                        <div className="relative mb-4">
+                            <div className="w-28 h-28 bg-gradient-to-b from-indigo-900/50 to-purple-950/50 rounded-full flex items-center justify-center border-4 border-indigo-600/50 shadow-[0_0_40px_rgba(99,102,241,0.3)]">
+                                <Star className="text-indigo-400" size={56} />
                             </div>
                             <div className="absolute -bottom-2 left-1/2 -translate-x-1/2 bg-indigo-600 px-4 py-1 rounded-full">
                                 <span className="text-xs font-black text-white uppercase tracking-widest">Elite Down!</span>
                             </div>
+                        </div>
+
+                        {/* 退職情報 */}
+                        {victoryQuitInfo && victoryQuitInfo.quitCount > 0 && (
+                          <div className="mb-4 px-4 py-2 bg-red-900/50 border border-red-600/50 rounded-lg text-center">
+                            <p className="text-sm text-red-300">
+                              😈 ブラック度により、社員の{victoryQuitInfo.blackDegree}%（{victoryQuitInfo.quitCount}人）が退職
+                            </p>
+                          </div>
+                        )}
+
+                        {/* プレイヤー情報（社員数・ゴールド） */}
+                        <div className="flex items-center gap-4 mb-4 px-4 py-2 bg-slate-800/50 rounded-lg">
+                          <div className="flex items-center gap-2">
+                            <Users className="w-4 h-4 text-amber-400" />
+                            <span className="text-sm font-bold text-amber-300">{heroStats.employees}人</span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <Coins className="w-4 h-4 text-yellow-400" />
+                            <span className="text-sm font-bold text-yellow-300">{gold}G</span>
+                          </div>
                         </div>
 
                         {/* ボタン群 */}
@@ -2276,6 +2452,12 @@ const App: React.FC = () => {
                                 className="flex items-center justify-center gap-2 px-6 py-3 bg-indigo-600 hover:bg-indigo-500 rounded-xl text-sm font-black text-white uppercase tracking-widest transition-all shadow-lg hover:shadow-indigo-500/30"
                             >
                                 <Award size={18} /> 報酬を見る
+                            </button>
+                            <button
+                                onClick={() => handleBattleWinFinish(permanentDeck)}
+                                className="flex items-center justify-center gap-2 px-6 py-3 bg-slate-700 hover:bg-slate-600 rounded-xl text-sm font-black text-slate-200 uppercase tracking-widest transition-all"
+                            >
+                                <ArrowRight size={18} /> 次へ進む
                             </button>
                         </div>
                     </div>
@@ -2298,13 +2480,25 @@ const App: React.FC = () => {
                         </div>
 
                         {/* 商人アイコン */}
-                        <div className="relative mb-6">
-                            <div className="w-32 h-32 bg-gradient-to-b from-yellow-900/50 to-amber-950/50 rounded-full flex items-center justify-center border-4 border-yellow-600/50 shadow-[0_0_40px_rgba(234,179,8,0.3)]">
-                                <ShoppingCart className="text-yellow-400" size={64} />
+                        <div className="relative mb-4">
+                            <div className="w-28 h-28 bg-gradient-to-b from-yellow-900/50 to-amber-950/50 rounded-full flex items-center justify-center border-4 border-yellow-600/50 shadow-[0_0_40px_rgba(234,179,8,0.3)]">
+                                <ShoppingCart className="text-yellow-400" size={56} />
                             </div>
                             <div className="absolute -bottom-2 left-1/2 -translate-x-1/2 bg-yellow-600 px-4 py-1 rounded-full">
                                 <span className="text-xs font-black text-white uppercase tracking-widest">Merchant</span>
                             </div>
+                        </div>
+
+                        {/* プレイヤー情報（社員数・ゴールド） */}
+                        <div className="flex items-center gap-4 mb-4 px-4 py-2 bg-slate-800/50 rounded-lg">
+                          <div className="flex items-center gap-2">
+                            <Users className="w-4 h-4 text-amber-400" />
+                            <span className="text-sm font-bold text-amber-300">{heroStats.employees}人</span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <Coins className="w-4 h-4 text-yellow-400" />
+                            <span className="text-sm font-bold text-yellow-300">{gold}G</span>
+                          </div>
                         </div>
 
                         {/* ボタン群 */}
@@ -2337,80 +2531,26 @@ const App: React.FC = () => {
             )}
             {gameState === 'PLAYING' && (
                 <div className="flex flex-col gap-2 flex-1">
-                    {/* HASTEとMANAゲージ */}
+                    {/* ホワイト・ブラックゲージ */}
                     <div className="flex flex-col gap-2 w-full">
-                      {/* 締切ゲージ */}
-                      <div className="flex flex-col gap-0">
-                        {/* ゲージ行 */}
-                        <div className="flex items-center gap-2">
-                          <Tooltip content={"締切ゲージが最大になると締切判定。\nノルマ達成ならクリア、未達成なら敗北。"}>
-                            <div className="flex items-center gap-1 w-14 cursor-pointer select-none hover:bg-slate-800/50 rounded px-1 -mx-1 transition-colors">
-                              <Zap className="w-4 h-4 text-slate-300 pointer-events-none" />
-                              <span className="text-[0.5rem] font-black text-slate-300 pointer-events-none">締切</span>
-                            </div>
-                          </Tooltip>
-                          <div className="flex-1 h-6 bg-slate-950 rounded border border-slate-700 relative overflow-hidden">
-                            {/* 1区切りグリッド */}
-                            <div className="absolute inset-0 flex z-10">
-                              {[...Array(maxHaste)].map((_, i) => (
-                                <div key={i} className="flex-1 border-r border-slate-600 last:border-r-0" />
-                              ))}
-                            </div>
-                            {/* ゲージ本体（消費量を表示：0から始まりMAXに向かって増加） */}
-                            <div
-                              className={`h-full transition-all duration-300 relative ${
-                                usedHaste / maxHaste > 0.8
-                                  ? 'bg-gradient-to-r from-red-500 to-red-300'
-                                  : 'bg-gradient-to-r from-slate-400 to-white'
-                              }`}
-                              style={{ width: `${(usedHaste / maxHaste) * 100}%` }}
-                            />
-                            {/* 数値表示（消費量 / 最大値） */}
-                            <span className="absolute inset-0 flex items-center justify-center text-[0.625rem] font-black text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)] z-20">
-                              {usedHaste} / {maxHaste}
-                            </span>
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* MANAゲージ */}
+                      {/* ブラック度ゲージ（0〜100） */}
                       <div className="flex items-center gap-2">
-                        {/* ブラック側アイコン */}
-                        <Tooltip content="ブラック度（-100が最大）">
+                        <Tooltip content="ブラック度（100が最大）&#10;高いほど炎上リスクが上がり、戦闘後に社員が退職する">
                           <div className="flex items-center gap-1 w-14 cursor-pointer select-none hover:bg-slate-800/50 rounded px-1 -mx-1 transition-colors">
                             <span className="text-lg pointer-events-none">😈</span>
                             <span className="text-[0.5rem] font-black text-red-400 pointer-events-none">BLACK</span>
                           </div>
                         </Tooltip>
-                        {/* ホワイト・ブラック度ゲージ（中央が0） */}
                         <div className="flex-1 h-6 bg-slate-950 rounded border border-slate-700 relative overflow-hidden">
-                          {/* 中央線 */}
-                          <div className="absolute left-1/2 top-0 bottom-0 w-0.5 bg-slate-500 z-10" />
-                          {/* ブラック側（左へ伸びる） */}
-                          {workStyle < 0 && (
-                            <div
-                              className="absolute right-1/2 h-full bg-gradient-to-l from-red-600 to-red-800 transition-all duration-300"
-                              style={{ width: `${Math.abs(workStyle) / 2}%` }}
-                            />
-                          )}
-                          {/* ホワイト側（右へ伸びる） */}
-                          {workStyle > 0 && (
-                            <div
-                              className="absolute left-1/2 h-full bg-gradient-to-r from-green-600 to-green-400 transition-all duration-300"
-                              style={{ width: `${workStyle / 2}%` }}
-                            />
-                          )}
+                          {/* ブラック度ゲージ（左から右へ伸びる） */}
+                          <div
+                            className="absolute left-0 h-full bg-gradient-to-r from-red-800 to-red-500 transition-all duration-300"
+                            style={{ width: `${workStyle}%` }}
+                          />
                           <span className="absolute inset-0 flex items-center justify-center text-[0.625rem] font-black text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)] z-20">
-                            {workStyle > 0 ? `+${workStyle}` : workStyle}
+                            {workStyle}
                           </span>
                         </div>
-                        {/* ホワイト側アイコン */}
-                        <Tooltip content="ホワイト度（+100が最大）">
-                          <div className="flex items-center justify-center h-6 px-1.5 cursor-pointer select-none hover:bg-slate-800/50 rounded transition-colors">
-                            <span className="text-lg pointer-events-none">😇</span>
-                            <span className="text-[0.5rem] font-black text-green-400 pointer-events-none">WHITE</span>
-                          </div>
-                        </Tooltip>
                       </div>
 
                       {/* 基礎パラメータとBUFFS */}
@@ -2469,13 +2609,25 @@ const App: React.FC = () => {
                                       ? 'text-purple-400'
                                       : buff.type === 'yudan'
                                       ? 'text-blue-400'
+                                      : buff.type === 'unity'
+                                      ? 'text-green-400'
+                                      : buff.type === 'focus'
+                                      ? 'text-indigo-400'
+                                      : buff.type === 'gacha'
+                                      ? 'text-pink-400'
+                                      : buff.type === 'nextCardFree'
+                                      ? 'text-red-400'
                                       : 'text-red-400'
                                   }`}>
-                                    {buff.name}
-                                    {buff.stackCount > 1 && ` x${buff.stackCount}`}
+                                    {/* スクラム・フロー・ガチャは特別表示、それ以外は通常名 */}
+                                    {buff.type === 'unity' ? '収益+' : buff.type === 'focus' ? '収益×' : buff.type === 'gacha' ? '収益^' : buff.name}
+                                    {buff.stackCount > 1 && buff.type !== 'unity' && buff.type !== 'focus' && buff.type !== 'strength' && buff.type !== 'gacha' && ` x${buff.stackCount}`}
                                     {buff.stat && ` +${buff.value}`}
                                     {buff.type === 'base_damage_boost' && ` x${buff.value}`}
-                                    {buff.type === 'strength' && ` ${buff.value}`}
+                                    {buff.type === 'strength' && ` +${buff.stackCount * 20}`}
+                                    {buff.type === 'unity' && `${buff.stackCount * 50}%`}
+                                    {buff.type === 'focus' && `${Math.pow(1.4, buff.stackCount).toFixed(2)}`}
+                                    {buff.type === 'gacha' && `${Math.pow(1.5, buff.stackCount).toFixed(2)}乗`}
                                     {buff.type === 'deathmarch' && ` (+${buff.stackCount * 10}締切)`}
                                     {buff.type === 'bug' && ` (炎上時-${buff.stackCount * 10}%)`}
                                     {buff.type === 'kyushoku' && ` (-${buff.stackCount * 20}%社員)`}
@@ -2522,8 +2674,40 @@ const App: React.FC = () => {
                             </div>
                         )}
                     </div>
+
+                    {/* 締切ゲージ（カードの下） */}
+                    <div className="flex items-center gap-2 mt-2 px-4">
+                      <Tooltip content={"締切ゲージが最大になると締切判定。\nノルマ達成ならクリア、未達成なら敗北。"}>
+                        <div className="flex items-center gap-1 cursor-pointer select-none hover:bg-slate-800/50 rounded px-1 transition-colors">
+                          <Clock className="w-4 h-4 text-slate-300 pointer-events-none" />
+                          <span className="text-[0.5rem] font-black text-slate-300 pointer-events-none">締切</span>
+                        </div>
+                      </Tooltip>
+                      <div className="flex-1 h-5 bg-slate-950 rounded border border-slate-700 relative overflow-hidden">
+                        {/* 1区切りグリッド */}
+                        <div className="absolute inset-0 flex z-10">
+                          {[...Array(maxHaste)].map((_, i) => (
+                            <div key={i} className="flex-1 border-r border-slate-600 last:border-r-0" />
+                          ))}
+                        </div>
+                        {/* ゲージ本体 */}
+                        <div
+                          className={`h-full transition-all duration-300 relative ${
+                            usedHaste / maxHaste > 0.8
+                              ? 'bg-gradient-to-r from-red-500 to-red-300'
+                              : 'bg-gradient-to-r from-slate-400 to-white'
+                          }`}
+                          style={{ width: `${(usedHaste / maxHaste) * 100}%` }}
+                        />
+                        {/* 数値表示 */}
+                        <span className="absolute inset-0 flex items-center justify-center text-[0.5rem] font-black text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)] z-20">
+                          {usedHaste} / {maxHaste}
+                        </span>
+                      </div>
+                    </div>
+
                     {/* アクションボタン */}
-                    <p className="text-center text-[10px] text-white mt-0.5">締切ゲージが足りなくなったとき用↓</p>
+                    <p className="text-center text-[10px] text-slate-500 mt-1">締切に届かないとき用↓</p>
                     <div className="flex justify-center gap-2 mt-0.5">
                       {/* 精神統一ボタン */}
                       <button

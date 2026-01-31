@@ -1,7 +1,13 @@
 disabled,excludeFromPool,name,rarity,effectDescription,flavorText,cardType,baseDamage,employeeRatio,manaCost,delay,workStyleChange,effectType,effectTrigger,effectParams,color,borderColor,heightClass,widthClass,borderRadiusClass,icon
 number,number,string,string,string,string,string,number,number,number,number,number,string,string,string,string,string,string,string,string,string
 0,1,大機能実装,NEUTRAL,高難度機能を完成,一発逆転,attack,100,0,0,1,0,,,,bg-amber-700,border-amber-400,h-10,w-52,rounded-md,https://img.icons8.com/fluency/144/source-code.png
-0,1,コーディング,NEUTRAL,地道な開発作業,社員が頑張る,attack,20,100,0,1,0,,,,bg-blue-700,border-blue-400,h-9,w-52,rounded-md,https://img.icons8.com/fluency/144/code.png
-0,0,スタンドアップ,NEUTRAL,+50%/スタック（加算）,チームワーク,support,0,0,0,1,0,add_buff,on_use,buffId=UNITY,bg-green-700,border-green-400,h-9,w-52,rounded-md,https://img.icons8.com/fluency/144/meeting.png
-0,0,集中,NEUTRAL,x1.4/スタック（乗算）,深い没入,support,0,0,0,1,0,add_buff,on_use,buffId=FOCUS,bg-indigo-700,border-indigo-400,h-9,w-52,rounded-md,https://img.icons8.com/fluency/144/target.png
-0,0,外注手配,NEUTRAL,戦闘中の社員+20,仲間を増やす,support,0,0,0,1,0,add_strength,on_use,value=20,bg-purple-700,border-purple-400,h-9,w-52,rounded-md,https://img.icons8.com/fluency/144/add-user-male.png
+0,1,コーディング,NEUTRAL,地道な開発作業,社員が頑張る,attack,0,100,0,1,0,,,,bg-blue-700,border-blue-400,h-9,w-52,rounded-md,https://img.icons8.com/fluency/144/code.png
+0,0,スタンドアップ,NEUTRAL,スクラム+1（+50%加算）,チームワーク,support,0,0,0,1,0,add_buff,on_use,buffId=UNITY,bg-green-700,border-green-400,h-9,w-52,rounded-md,https://img.icons8.com/fluency/144/meeting.png
+0,0,集中,NEUTRAL,フロー+1（x1.4乗算）,深い没入,support,0,0,0,1,0,add_buff,on_use,buffId=FOCUS,bg-indigo-700,border-indigo-400,h-9,w-52,rounded-md,https://img.icons8.com/fluency/144/target.png
+0,0,外注手配,NEUTRAL,応援+20（社員に加算）,仲間を増やす,support,0,0,0,1,0,add_strength,on_use,value=20,bg-purple-700,border-purple-400,h-9,w-52,rounded-md,https://img.icons8.com/fluency/144/add-user-male.png
+0,0,発売延期,NEUTRAL,締切+2 ブラック-20,時間を稼ぐ,support,0,0,0,1,-20,add_time,on_use,value=2,bg-slate-700,border-slate-400,h-9,w-52,rounded-md,https://img.icons8.com/fluency/144/calendar.png
+0,0,デスマーチ,BLACK,このカードと次カードは締切を消費しない。\nブラック+20,限界突破,support,0,0,0,1,20,add_buff,on_use,buffId=NEXTCARDFREE,bg-red-800,border-red-500,h-9,w-52,rounded-md,https://img.icons8.com/fluency/144/fire-element.png
+0,0,青天井ガチャ,BLACK,ガチャ+1（^1.5累乗）ブラック+40,射幸心煽り,support,0,0,0,1,40,add_buff,on_use,buffId=GACHA,bg-pink-800,border-pink-400,h-9,w-52,rounded-md,https://img.icons8.com/fluency/144/slot-machine.png
+0,0,社員旅行,WHITE,ノルマ20%支払 ブラック-30,リフレッシュ,support,0,0,0,1,-30,cost_gold_percent,on_use,value=20,bg-cyan-700,border-cyan-400,h-9,w-52,rounded-md,https://img.icons8.com/fluency/144/beach.png
+0,0,スパゲッティコード,BLACK,汚いが速い ブラック+10,技術的負債,attack,120,0,0,1,10,,,,bg-orange-800,border-orange-500,h-9,w-52,rounded-md,https://img.icons8.com/fluency/144/spaghetti.png
+0,0,ドット職人,NEUTRAL,職人技,匠の技,attack,50,50,0,1,0,,,,bg-emerald-700,border-emerald-400,h-9,w-52,rounded-md,https://img.icons8.com/fluency/144/pixel-art.png

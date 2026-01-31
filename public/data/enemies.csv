@@ -1,8 +1,8 @@
 disabled,name,icon,baseHP,minFloor,maxFloor,traitId,dropsAbility
 number,string,string,number,number,number,string,string
-0,パズルゲーム,https://img.icons8.com/fluency/240/puzzle.png,100,1,1,NEUTRAL,N
-0,カジュアルゲーム,https://img.icons8.com/fluency/240/game-controller.png,150,2,2,NEUTRAL,N
-0,カードゲーム,https://img.icons8.com/fluency/240/cards.png,250,3,3,NEUTRAL,C
+0,パズルゲーム,https://img.icons8.com/fluency/240/puzzle.png,200,1,1,NEUTRAL,N
+0,カジュアルゲーム,https://img.icons8.com/fluency/240/game-controller.png,300,2,2,NEUTRAL,N
+0,カードゲーム,https://img.icons8.com/fluency/240/cards.png,400,3,3,NEUTRAL,C
 0,アクションゲーム,https://img.icons8.com/fluency/240/sword.png,400,4,4,NEUTRAL,Y
 0,シューティング,https://img.icons8.com/fluency/240/gun.png,600,5,5,NEUTRAL,N
 0,格闘ゲーム,https://img.icons8.com/fluency/240/boxing.png,900,6,6,NEUTRAL,N

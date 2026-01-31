@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { Skill, CardProps } from '../types';
-import { Zap, Ban, Users } from 'lucide-react';
+import { Clock, Ban, Users } from 'lucide-react';
 import { calculateDamage } from '../utils/skillCalculations';
 
 export const Card: React.FC<CardProps> = ({
@@ -102,19 +102,19 @@ export const Card: React.FC<CardProps> = ({
             ? 'bg-white text-slate-900'
             : 'text-slate-400'
         }`}>
-          <Zap className="w-4 h-4" />
+          <Clock className="w-4 h-4" />
           <span className="text-[0.65rem] font-black">{actualDelay}</span>
         </div>
 
-        {/* ワークスタイル変化 */}
+        {/* ブラック度変化（+は赤/ブラック増、-は青/ブラック減、0なら非表示でスペース確保） */}
         <div className={`flex items-center gap-1 px-1.5 py-0.5 rounded ${
           skill.workStyleChange && skill.workStyleChange > 0
-            ? 'bg-green-600 text-white'
+            ? 'bg-red-600 text-white'
             : skill.workStyleChange && skill.workStyleChange < 0
-              ? 'bg-red-600 text-white'
-              : 'text-slate-400'
+              ? 'bg-blue-600 text-white'
+              : 'invisible'
         }`}>
-          <span className="text-sm">{skill.workStyleChange && skill.workStyleChange > 0 ? '😇' : skill.workStyleChange && skill.workStyleChange < 0 ? '😈' : '⚖️'}</span>
+          <span className="text-sm">{skill.workStyleChange && skill.workStyleChange > 0 ? '😈' : '😇'}</span>
           <span className="text-[0.65rem] font-black">
             {skill.workStyleChange ? (skill.workStyleChange > 0 ? `+${skill.workStyleChange}` : skill.workStyleChange) : '±0'}
           </span>
@@ -139,64 +139,48 @@ export const Card: React.FC<CardProps> = ({
           </h3>
       </div>
 
-      {/* カードタイプ */}
-      <span className={`text-[0.5rem] font-black leading-none mt-0.5 py-0.5 z-10 ${
-        skill.cardType === 'support'
-          ? 'text-teal-400'
-          : 'text-orange-400'
-      }`}>
-        {skill.cardType === 'support' ? 'サポート' : 'アタック'}
-      </span>
-
-      {/* 進捗表記 */}
+      {/* 進捗表記（計算式込み） */}
       <div className="flex flex-col items-center gap-0.5 mt-0.5 z-10">
         {hasDamage && (
           <div className={`flex items-center gap-1 px-2 py-0.5 rounded leading-tight ${
             skill.employeeRatio < 0
-              ? 'bg-purple-600'  // マイナス係数（ハッカソンなど）
+              ? 'bg-purple-600'  // マイナス係数
               : skill.employeeRatio > 0
                 ? 'bg-orange-600'  // 社員数スケール
                 : 'bg-white'  // ベースダメージのみ
           }`}>
-            <span className={`text-[0.75rem] font-black ${skill.employeeRatio === 0 ? 'text-slate-900' : 'text-white'}`}>
-              {finalDisplayDamage}
-            </span>
-            <span className={`text-[0.5rem] font-bold ${skill.employeeRatio === 0 ? 'text-slate-700' : 'text-white'}`}>進捗</span>
+            {/* ベースダメージのみ: +100 */}
+            {skill.baseDamage > 0 && skill.employeeRatio === 0 && (
+              <span className="text-[0.75rem] font-black text-slate-900">+{skill.baseDamage}</span>
+            )}
+            {/* 社員数のみ: 👥×1.0 = +10 */}
+            {skill.baseDamage === 0 && skill.employeeRatio !== 0 && (
+              <>
+                <Users className="w-3 h-3 text-white/60" />
+                <span className="text-[0.55rem] font-medium text-white/60">×{(skill.employeeRatio / 100).toFixed(1)} =</span>
+                <span className="text-[0.85rem] font-black text-white">+{finalDisplayDamage}</span>
+              </>
+            )}
+            {/* 両方: 100+👥×1.0 = +110 */}
+            {skill.baseDamage > 0 && skill.employeeRatio !== 0 && (
+              <>
+                <span className="text-[0.55rem] font-medium text-white/60">{skill.baseDamage}+</span>
+                <Users className="w-3 h-3 text-white/60" />
+                <span className="text-[0.55rem] font-medium text-white/60">×{(skill.employeeRatio / 100).toFixed(1)} =</span>
+                <span className="text-[0.85rem] font-black text-white">+{finalDisplayDamage}</span>
+              </>
+            )}
           </div>
         )}
         {!hasDamage && (
           <div className="flex items-center gap-1 px-2 py-0.5 rounded border border-slate-600 bg-transparent leading-tight">
-            <span className="text-[0.75rem] font-black text-slate-500">-</span>
-            <span className="text-[0.5rem] font-bold text-slate-500">進捗なし</span>
+            <span className="text-[0.5rem] font-bold text-slate-500">-</span>
           </div>
         )}
       </div>
 
-      {/* Effect Description with Formula */}
+      {/* Effect Description */}
       <div className={`w-full flex-1 rounded-b px-2 py-1 border-t flex flex-col items-center justify-start mt-0.5 ${effectsDisabled ? 'bg-slate-950 border-slate-800' : 'bg-slate-800/50 border-slate-700'}`}>
-          {/* 計算式（1行目） */}
-          {hasDamage && (
-            <div className="flex items-center gap-0.5 text-[0.6rem] font-bold text-slate-400 mb-0.5">
-              <span>=</span>
-              {skill.baseDamage > 0 && <span>{skill.baseDamage}</span>}
-              {skill.baseDamage > 0 && skill.employeeRatio !== 0 && (
-                <span>{skill.employeeRatio > 0 ? '+' : ''}</span>
-              )}
-              {skill.employeeRatio !== 0 && (
-                <>
-                  <Users className="w-3 h-3 text-amber-400" />
-                  <span className={skill.employeeRatio < 0 ? 'text-purple-400' : 'text-amber-400'}>
-                    ×{(skill.employeeRatio / 100).toFixed(1)}
-                  </span>
-                </>
-              )}
-              {/* 能力ダメージ */}
-              {effectDamage > 0 && (skill.baseDamage > 0 || skill.employeeRatio !== 0) && <span>+</span>}
-              {skill.effect?.type === 'enemy_damage_taken' && (
-                <span className="text-indigo-400">減{enemyDamageTaken}×{(skill.effect.params.value || 100) / 100}={effectDamage}</span>
-              )}
-            </div>
-          )}
           {/* 効果説明（目立つ） */}
           {skill.effect?.description && (
             <p className={`text-[0.55rem] text-center leading-relaxed font-medium whitespace-pre-line ${effectsDisabled ? 'text-slate-600 line-through' : 'text-slate-300'}`}>

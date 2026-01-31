@@ -24,7 +24,9 @@ export type EffectType =
   | 'add_strength'         // 筋力バフを付与
   | 'double_strength'      // 前が物理なら筋力2倍
   | 'add_slash_to_deck'    // 0コストスラッシュをデッキに追加
-  | 'add_parry';           // パリィバフを付与
+  | 'add_parry'            // パリィバフを付与
+  | 'add_time'             // 締切を増やす（value分）
+  | 'cost_gold_percent';   // ノルマの%分ゴールドを引く
 
 // バフタイプ
 export type BuffType =
@@ -39,8 +41,10 @@ export type BuffType =
   | 'bug'               // バグ（炎上時に消費、1につき進捗-10%）
   | 'kyushoku'          // 休職（社員数-20%/stack）
   | 'yudan'             // 油断（アタックのヘイスト+5/stack）
-  | 'unity'             // 一致団結（+100%/stack、加算）
-  | 'focus';            // 集中（x1.2^stack、乗算）
+  | 'unity'             // スクラム（+50%/stack、加算）
+  | 'focus'             // フロー（x1.4^stack、乗算）
+  | 'gacha'             // ガチャ（収益^1.5、累乗）
+  | 'nextCardFree';     // デスマーチ（次のカードディレイ0）
 
 // プレイヤーのバフ/デバフ
 export interface PlayerBuff {
