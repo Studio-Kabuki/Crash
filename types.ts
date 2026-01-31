@@ -33,7 +33,8 @@ export type BuffType =
   | 'stat_down'         // ステータスダウン
   | 'base_damage_boost' // ベースダメージ倍化（スタック制）
   | 'strength'          // 筋力（カード使用時10減、ADに加算）
-  | 'parry';            // パリィ（次カード使用で消滅、敵攻撃時に筋力+50）
+  | 'parry'             // パリィ（次カード使用で消滅、敵攻撃時に無敵+筋力+50）
+  | 'invincible';       // 無敵（敵攻撃を無効化、スタック数分有効）
 
 // プレイヤーのバフ/デバフ
 export interface PlayerBuff {

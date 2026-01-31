@@ -797,16 +797,43 @@ const App: React.FC = () => {
   };
 
   const handleEnemyAttack = (currentStack: Skill[], currentDeck: Skill[], currentHand: Skill[]) => {
-    // パリィチェック: パリィバフがあれば消費して筋力+50
+    // 無敵判定: パリィや将来の無敵バフをチェック
     const hasParry = playerBuffs.some(b => b.type === 'parry');
+    const hasInvincibility = playerBuffs.some(b => b.type === 'invincible');
+    const isInvincible = hasParry || hasInvincibility;
+
+    // パリィ成功: 消費して筋力+50
     if (hasParry) {
-      // パリィを消費
       setPlayerBuffs(prev => prev.filter(b => b.type !== 'parry'));
-      // 筋力+50を付与
       addBuff('STRENGTH', 50);
     }
 
-    // 即座にフラグを設定して連打を防止
+    // 無敵バフも消費（スタック数を1減らす）
+    if (hasInvincibility) {
+      setPlayerBuffs(prev => {
+        const idx = prev.findIndex(b => b.type === 'invincible');
+        if (idx === -1) return prev;
+        const buff = prev[idx];
+        if (buff.value <= 1) {
+          return prev.filter((_, i) => i !== idx);
+        }
+        return prev.map((b, i) => i === idx ? { ...b, value: b.value - 1 } : b);
+      });
+    }
+
+    // 無敵時はダメージを受けずにターンリセットのみ
+    if (isInvincible) {
+      setIsMonsterAttacking(true);
+      setTimeout(() => {
+        setIsMonsterAttacking(false);
+        setTurnResetMessage(true);
+        setCurrentHaste(heroStats.sp);
+        setTimeout(() => setTurnResetMessage(false), 1000);
+      }, 800);
+      return;
+    }
+
+    // 通常のダメージ処理
     setIsMonsterAttacking(true);
     setTimeout(() => {
       setTimeout(() => {
@@ -820,14 +847,14 @@ const App: React.FC = () => {
             setGameState('GAME_OVER');
           } else {
             setTurnResetMessage(true);
-            setCurrentHaste(heroStats.sp); // ヘイストをリセット
+            setCurrentHaste(heroStats.sp);
             setTimeout(() => {
               setTurnResetMessage(false);
             }, 1000);
           }
         }, 500);
-      }, 400); 
-    }, 800); 
+      }, 400);
+    }, 800);
   };
 
   const isStuckDueToMana = hand.length > 0 && hand.every(s => s.manaCost > mana);
