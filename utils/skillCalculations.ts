@@ -104,7 +104,11 @@ export function calculateDamage(params: DamageCalculationParams): number {
   const physicalDmg = Math.floor(heroStats.ad * skill.adRatio / 100 * multipliers.physicalMultiplier);
   const magicDmg = Math.floor(heroStats.ap * skill.apRatio / 100 * multipliers.magicMultiplier);
 
-  return Math.max(0, scaledBaseDmg + physicalDmg + magicDmg);
+  // 征服者などのカード固有倍率を適用
+  const skillMultiplier = skill.multiplier ?? 1.0;
+  const totalDamage = Math.floor((scaledBaseDmg + physicalDmg + magicDmg) * skillMultiplier);
+
+  return Math.max(0, totalDamage);
 }
 
 interface EffectDamageParams {

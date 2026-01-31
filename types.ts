@@ -96,6 +96,7 @@ export interface Skill {
   effect?: SkillEffect;
   rarity: Rarity;
   flavorText?: string;    // 目立たない補足テキスト
+  multiplier?: number;    // ダメージ倍率（征服者など、使用するたび増加）
 }
 
 export interface BattleEvent {

@@ -776,35 +776,6 @@ const App: React.FC = () => {
             setCurrentHaste(heroStats.sp); // ヘイストをリセット
             setTimeout(() => {
               setTurnResetMessage(false);
-              // 手札がhandSize未満なら、handSizeまで引く
-              const currentHandCount = currentHand.length;
-              const needToDraw = Math.max(0, handSize - currentHandCount);
-              if (needToDraw > 0) {
-                // 山札から引く。足りなければ捨て札をリサイクル（精神統一ダミーカードは除外）
-                let availableDeck = [...currentDeck];
-                let stackToRecycle = currentStack.filter(s => s.id !== 'rest');
-
-                // 山札が足りない場合、捨て札をシャッフルして山札に追加
-                if (availableDeck.length < needToDraw && stackToRecycle.length > 0) {
-                  setIsShuffling(true);
-                  availableDeck = [...availableDeck, ...shuffle(stackToRecycle)];
-                  stackToRecycle = [];
-                  setTimeout(() => setIsShuffling(false), 800);
-                }
-
-                // 引けるだけ引く
-                const cardsToDraw = Math.min(needToDraw, availableDeck.length);
-                const drawnCards = availableDeck.slice(0, cardsToDraw);
-                const remainingDeck = availableDeck.slice(cardsToDraw);
-
-                // 既存の手札に追加
-                setHand([...currentHand, ...drawnCards]);
-                setDeck(remainingDeck);
-                if (stackToRecycle.length === 0 && currentStack.length > 0) {
-                  setStack([]);
-                  setCurrentComboPower(0); // コンボパワーもリセット
-                }
-              }
             }, 1000);
           }
         }, 500);
@@ -995,17 +966,18 @@ const App: React.FC = () => {
              addBuff(skill.effect.params.buffId, skill.effect.params.value);
            }
            if (skill.effect.type === 'permanent_power_up') {
-             // ベースダメージを増加
-             const damageBonus = skill.effect.params.value || 0;
-             const updateSkillBaseDamage = (s: Skill) => {
+             // 倍率を増加（使用するたび+30%）
+             const multiplierIncrease = (skill.effect.params.value || 30) / 100;
+             const updateSkillMultiplier = (s: Skill) => {
                if (s.id !== skill.id) return s;
-               return { ...s, baseDamage: s.baseDamage + damageBonus };
+               const currentMultiplier = s.multiplier ?? 1.0;
+               return { ...s, multiplier: currentMultiplier + multiplierIncrease };
              };
              // permanentDeck、deck、newStackすべてを更新
-             setPermanentDeck(prev => prev.map(updateSkillBaseDamage));
-             setDeck(prev => prev.map(updateSkillBaseDamage));
+             setPermanentDeck(prev => prev.map(updateSkillMultiplier));
+             setDeck(prev => prev.map(updateSkillMultiplier));
              // newStackも更新（現在の戦闘で反映させるため）
-             newStack = newStack.map(updateSkillBaseDamage);
+             newStack = newStack.map(updateSkillMultiplier);
            }
            if (skill.effect.type === 'draw') {
              // カード効果でドロー（上限なし）
@@ -1098,14 +1070,16 @@ const App: React.FC = () => {
             return;
         }
 
+        // カードを使ったら1枚ドロー
+        const drawResult = drawCards(1, newHand, newDeck, newStack);
+        setHand(drawResult.newHand);
+        setDeck(drawResult.newDeck);
+        setStack(drawResult.newStack);
+
         // ヘイストが0以下になったら敵の攻撃
         if (newHaste <= 0) {
-             handleEnemyAttack(newStack, newDeck, newHand);
-        } else if (newHand.length === 0) {
-            // 手札が0枚になったらドロー
-            drawHand(newDeck, newHaste, newStack);
+             handleEnemyAttack(drawResult.newStack, drawResult.newDeck, drawResult.newHand);
         }
-        // 手札が残っている場合はそのまま（ドローしない）
         setIsProcessingCard(false); // カード処理終了
     }, 450);
   };
