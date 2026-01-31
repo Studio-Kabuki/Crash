@@ -62,6 +62,7 @@ interface RawPassive {
   value: number;
   value2: number;
   rarity: string;
+  maxStack: number;  // 最大所持数（0=無制限）
 }
 
 interface RawTrait {
@@ -101,7 +102,7 @@ export interface HeroInitialData {
 // バフ定義（プレイヤーに付与されるバフ/デバフ）
 export interface BuffDefinition {
   id: string;
-  type: 'charge' | 'stat_up' | 'stat_down' | 'base_damage_boost' | 'strength' | 'parry' | 'invincible';
+  type: 'charge' | 'stat_up' | 'stat_down' | 'base_damage_boost' | 'strength' | 'parry' | 'invincible' | 'deathmarch' | 'bug' | 'kyushoku' | 'yudan' | 'unity' | 'focus';
   name: string;
   icon: string;
   description: string;
@@ -212,6 +213,7 @@ function convertToPassive(raw: RawPassive): PassiveEffect {
     type: raw.type as PassiveEffect['type'],
     value: raw.value,
     rarity: raw.rarity as Rarity,
+    maxStack: raw.maxStack || 0,  // 0=無制限
     ...(raw.value2 ? { value2: raw.value2 } : {})
   };
 }

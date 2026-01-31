@@ -6,6 +6,12 @@ number,string,string,string,string,string,number,string,string
 0,SP_UP,sp_up,stat_up,ヘイストUP,ヘイストが上昇,20,sp,https://img.icons8.com/fluency/144/running.png
 0,AD_DOWN,ad_down,stat_down,攻撃力DOWN,物理攻撃力が低下,-30,ad,https://img.icons8.com/fluency/144/sword.png
 0,AP_DOWN,ap_down,stat_down,魔力DOWN,魔法攻撃力が低下,-30,ap,https://img.icons8.com/fluency/144/magic-wand.png
-0,BASE_DOUBLE,base_double,base_damage_boost,集中,ベースダメージが2倍（スタック消費）,1,,https://img.icons8.com/fluency/144/meditation.png
+0,BASE_DOUBLE,base_double,base_damage_boost,ベース倍化,ベースダメージが2倍（スタック消費）,1,,https://img.icons8.com/fluency/144/meditation.png
 0,STRENGTH,strength,strength,筋力,カード使用時に10減り、ADに加算される,20,,https://img.icons8.com/fluency/144/muscle.png
 0,PARRY,parry,parry,パリィ,次のカード使用で消滅。敵攻撃時に筋力+50,1,,https://img.icons8.com/fluency/144/shield.png
+0,DEATHMARCH,deathmarch,deathmarch,デスマーチ,スタック×10ヘイスト増加。ダメージで全解除,1,,https://img.icons8.com/fluency/144/fire-element.png
+0,BUG,bug,bug,バグ,炎上時に消費。1につき進捗-10%,1,,https://img.icons8.com/fluency/144/bug.png
+0,KYUSHOKU,kyushoku,kyushoku,休職,1につき社員数-20%,1,,https://img.icons8.com/fluency/144/sick.png
+0,YUDAN,yudan,yudan,油断,1につきアタックのヘイスト+5,1,,https://img.icons8.com/fluency/144/sleeping.png
+0,UNITY,unity,unity,一致団結,1スタックにつき+50%（加算）,1,,https://img.icons8.com/fluency/144/teamwork.png
+0,FOCUS,focus,focus,集中,1スタックにつきx1.4（乗算）,1,,https://img.icons8.com/fluency/144/target.png

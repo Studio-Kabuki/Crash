@@ -1,16 +1,7 @@
 disabled,excludeFromPool,name,rarity,effectDescription,flavorText,cardType,baseDamage,employeeRatio,manaCost,delay,workStyleChange,effectType,effectTrigger,effectParams,color,borderColor,heightClass,widthClass,borderRadiusClass,icon
 number,number,string,string,string,string,string,number,number,number,number,number,string,string,string,string,string,string,string,string,string
-0,1,コーディング,NEUTRAL,基本作業,社員が黙々とコードを書く,attack,20,100,0,10,0,,,,bg-slate-700,border-slate-400,h-8,w-56,rounded-sm,https://img.icons8.com/fluency/144/source-code.png
-0,0,外注,BLACK,高コスト高効率,外の力を借りる,attack,10,200,20,10,-10,,,,bg-red-800,border-red-500,h-9,w-52,rounded-md,https://img.icons8.com/fluency/144/handshake.png
-0,0,MVP開発,NEUTRAL,少数精鋭でも成果が出る,まずは最小限で,attack,80,0,10,10,0,,,,bg-slate-600,border-slate-400,h-9,w-52,rounded-md,https://img.icons8.com/fluency/144/rocket.png
-0,0,ハッカソン,BLACK,大企業ほど苦手,24時間で何ができる？,attack,150,-50,30,20,-15,,,,bg-red-700,border-red-400,h-10,w-56,rounded-lg,https://img.icons8.com/fluency/144/brain.png
-0,0,ミーティング,WHITE,士気+30を回復,認識を合わせよう,support,0,0,0,5,5,mana_recovery,on_use,value=30,bg-green-600,border-green-400,h-8,w-48,rounded-full,https://img.icons8.com/fluency/144/meeting.png
-0,0,デスマーチ,BLACK,次のカードを2回発動,寝ずに働け,support,0,0,20,0,-25,add_buff,on_use,buffId=CHARGE,bg-red-900,border-red-500,h-10,w-52,rounded-md,https://img.icons8.com/fluency/144/fire-element.png
-0,0,福利厚生,WHITE,士気+50を回復,働きやすい職場,support,0,0,0,10,15,mana_recovery,on_use,value=50,bg-green-700,border-green-400,h-9,w-52,rounded-full,https://img.icons8.com/fluency/144/spa-flower.png
-0,0,採用活動,WHITE,社員数+10,良い人材を探そう,support,0,0,30,15,5,add_strength,on_use,value=10,bg-green-600,border-green-400,h-9,w-52,rounded-md,https://img.icons8.com/fluency/144/add-user-male.png
-0,0,リファクタリング,WHITE,カードを2枚引く,技術的負債を返済,support,0,0,10,5,10,draw,on_use,value=2,bg-green-600,border-green-400,h-9,w-52,rounded-md,https://img.icons8.com/fluency/144/broom.png
-0,0,タイミーさん,NEUTRAL,戦闘中のみ一時社員+20,今日だけお願い！,support,0,0,15,5,0,add_strength,on_use,value=20,bg-amber-600,border-amber-400,h-9,w-52,rounded-md,https://img.icons8.com/fluency/144/user-clock.png
-0,0,徹夜作業,BLACK,進捗+50 士気-20,眠気との戦い,attack,50,150,0,15,-20,,,,bg-red-800,border-red-500,h-9,w-52,rounded-md,https://img.icons8.com/fluency/144/moon.png
-0,0,チームランチ,WHITE,士気+40 カード1枚引く,コミュニケーションは大事,support,0,0,0,10,10,mana_recovery,on_use,value=40,bg-green-600,border-green-400,h-9,w-52,rounded-full,https://img.icons8.com/fluency/144/restaurant.png
-0,0,インターン,NEUTRAL,低コストで進捗,学生の力を借りる,attack,30,50,5,5,0,,,,bg-slate-600,border-slate-400,h-8,w-48,rounded-sm,https://img.icons8.com/fluency/144/student-male.png
-0,0,納品,NEUTRAL,ベースダメージ重視,完成品を届ける,attack,100,0,20,15,0,,,,bg-slate-700,border-slate-400,h-9,w-52,rounded-md,https://img.icons8.com/fluency/144/box.png
+0,1,大機能実装,NEUTRAL,高難度機能を完成,一発逆転,attack,100,0,0,1,0,,,,bg-amber-700,border-amber-400,h-10,w-52,rounded-md,https://img.icons8.com/fluency/144/source-code.png
+0,1,コーディング,NEUTRAL,地道な開発作業,社員が頑張る,attack,20,100,0,1,0,,,,bg-blue-700,border-blue-400,h-9,w-52,rounded-md,https://img.icons8.com/fluency/144/code.png
+0,0,スタンドアップ,NEUTRAL,+50%/スタック（加算）,チームワーク,support,0,0,0,1,0,add_buff,on_use,buffId=UNITY,bg-green-700,border-green-400,h-9,w-52,rounded-md,https://img.icons8.com/fluency/144/meeting.png
+0,0,集中,NEUTRAL,x1.4/スタック（乗算）,深い没入,support,0,0,0,1,0,add_buff,on_use,buffId=FOCUS,bg-indigo-700,border-indigo-400,h-9,w-52,rounded-md,https://img.icons8.com/fluency/144/target.png
+0,0,外注手配,NEUTRAL,戦闘中の社員+20,仲間を増やす,support,0,0,0,1,0,add_strength,on_use,value=20,bg-purple-700,border-purple-400,h-9,w-52,rounded-md,https://img.icons8.com/fluency/144/add-user-male.png

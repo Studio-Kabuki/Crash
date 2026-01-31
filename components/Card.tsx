@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { Skill, CardProps } from '../types';
-import { Zap, Ban, Hexagon, Users } from 'lucide-react';
+import { Zap, Ban, Users } from 'lucide-react';
 import { calculateDamage } from '../utils/skillCalculations';
 
 export const Card: React.FC<CardProps> = ({
@@ -13,7 +13,9 @@ export const Card: React.FC<CardProps> = ({
   heroStats,
   damageMultiplier = 1,
   effectsDisabled = false,
-  enemyDamageTaken = 0
+  enemyDamageTaken = 0,
+  effectiveEmployees,
+  extraDelay = 0
 }) => {
   const [imgSrc, setImgSrc] = useState<string>(skill.icon);
   const [hasError, setHasError] = useState<boolean>(false);
@@ -24,10 +26,14 @@ export const Card: React.FC<CardProps> = ({
     setHasError(false);
   }, [skill.icon]);
 
-  // ダメージ計算
+  // 実効社員数（デバフ適用後）を使用
+  const actualEmployees = effectiveEmployees ?? heroStats.employees;
+  const effectiveHeroStats = { ...heroStats, employees: actualEmployees };
+
+  // ダメージ計算（デバフ適用後の社員数を使用）
   const totalDamage = calculateDamage({
     skill,
-    heroStats,
+    heroStats: effectiveHeroStats,
     damageMultiplier
   });
 
@@ -44,11 +50,11 @@ export const Card: React.FC<CardProps> = ({
   const finalDisplayDamage = totalDamage + effectDamage;
   const hasDamage = skill.baseDamage > 0 || skill.employeeRatio !== 0 || effectDamage > 0;
 
-  const actualDelay = skill.delay;
+  // 実際のヘイスト消費（油断デバフ等の追加分を含む）
+  const actualDelay = skill.delay + (skill.cardType === 'attack' ? extraDelay : 0);
 
-  const canAffordMana = mana >= skill.manaCost;
   const canAffordHaste = currentHaste >= actualDelay;
-  const canAfford = canAffordMana && canAffordHaste;
+  const canAfford = canAffordHaste;
 
   // ワークスタイル属性に応じた枠色
   const getRarityBorderColor = () => {
@@ -100,16 +106,18 @@ export const Card: React.FC<CardProps> = ({
           <span className="text-[0.65rem] font-black">{actualDelay}</span>
         </div>
 
-        {/* 士気 */}
+        {/* ワークスタイル変化 */}
         <div className={`flex items-center gap-1 px-1.5 py-0.5 rounded ${
-          skill.manaCost > 0
-            ? canAfford
-              ? 'bg-blue-500 text-white'
-              : 'bg-red-500 text-white'
-            : 'text-slate-400'
+          skill.workStyleChange && skill.workStyleChange > 0
+            ? 'bg-green-600 text-white'
+            : skill.workStyleChange && skill.workStyleChange < 0
+              ? 'bg-red-600 text-white'
+              : 'text-slate-400'
         }`}>
-          <Hexagon className="w-4 h-4" />
-          <span className="text-[0.65rem] font-black">{skill.manaCost}</span>
+          <span className="text-sm">{skill.workStyleChange && skill.workStyleChange > 0 ? '😇' : skill.workStyleChange && skill.workStyleChange < 0 ? '😈' : '⚖️'}</span>
+          <span className="text-[0.65rem] font-black">
+            {skill.workStyleChange ? (skill.workStyleChange > 0 ? `+${skill.workStyleChange}` : skill.workStyleChange) : '±0'}
+          </span>
         </div>
       </div>
 
@@ -207,7 +215,7 @@ export const Card: React.FC<CardProps> = ({
         <div className="absolute inset-0 bg-red-950/20 backdrop-blur-[1px] flex flex-col items-center justify-center pointer-events-none">
           <Ban className="text-red-500 opacity-50 mb-1" size={32} />
           <span className="text-[0.625rem] text-red-400 font-bold">
-            {!canAffordHaste ? 'HASTE不足' : '士気不足'}
+            HASTE不足
           </span>
         </div>
       )}

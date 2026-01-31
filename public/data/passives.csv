@@ -1,16 +1,9 @@
-disabled,id,name,icon,description,type,value,value2,rarity
-number,string,string,string,string,string,number,number,string
-0,overtime_master,残業マスター,https://img.icons8.com/fluency/240/overtime.png,社員数×0.5倍 ヘイスト+5,employee_mult,50,,BLACK
-0,crunch_mode,クランチモード,https://img.icons8.com/fluency/240/fire-element.png,社員数×0.7倍 ヘイスト+3,employee_mult,70,,BLACK
-0,speedrun,スピードラン,https://img.icons8.com/fluency/240/running.png,ヘイスト+10 士気-20,haste_add,10,-20,BLACK
-0,deadline_pressure,締め切り圧力,https://img.icons8.com/fluency/240/clock.png,進捗+30 士気-10,flat_damage_bonus,30,-10,BLACK
-0,welfare_program,福利厚生プログラム,https://img.icons8.com/fluency/240/like.png,社員数+50 ヘイスト-5 士気+20,employee_add,50,,WHITE
-0,work_life_balance,ワークライフバランス,https://img.icons8.com/fluency/240/spa-flower.png,社員数+30 士気+30,employee_add,30,30,WHITE
-0,mental_care,メンタルケア制度,https://img.icons8.com/fluency/240/brain.png,士気+50 ヘイスト-3,score_flat,50,-3,WHITE
-0,remote_work,リモートワーク,https://img.icons8.com/fluency/240/home.png,士気+20 手札+1,score_flat,20,,WHITE
-0,training_program,研修制度,https://img.icons8.com/fluency/240/training.png,社員数+20,employee_add,20,,NEUTRAL
-0,office_upgrade,オフィス改善,https://img.icons8.com/fluency/240/office.png,士気+15,score_flat,15,,NEUTRAL
-0,team_building,チームビルディング,https://img.icons8.com/fluency/240/conference-call.png,社員数+10 士気+10,employee_add,10,10,NEUTRAL
-0,extra_budget,追加予算,https://img.icons8.com/fluency/240/money.png,ゴールド+15,gold_bonus,15,,NEUTRAL
-0,efficiency_boost,効率化,https://img.icons8.com/fluency/240/speedometer.png,進捗+15,flat_damage_bonus,15,,NEUTRAL
-0,extra_life,セーフティネット,https://img.icons8.com/fluency/240/heart-with-pulse.png,ライフ+1,max_life_boost,1,,NEUTRAL
+disabled,id,name,icon,description,type,value,value2,rarity,maxStack
+number,string,string,string,string,string,number,number,string,number
+0,overtime_master,残業マスター,https://img.icons8.com/fluency/240/overtime.png,社員数×0.5倍,employee_mult,50,,BLACK,0
+0,deadline_pressure,締め切り圧力,https://img.icons8.com/fluency/240/clock.png,進捗+30,flat_damage_bonus,30,,BLACK,0
+0,welfare_program,福利厚生プログラム,https://img.icons8.com/fluency/240/like.png,社員数+50,employee_add,50,,WHITE,0
+0,mental_care,メンタルケア制度,https://img.icons8.com/fluency/240/brain.png,士気+50,score_flat,50,,WHITE,0
+0,training_program,研修制度,https://img.icons8.com/fluency/240/training.png,社員数+20,employee_add,20,,NEUTRAL,0
+0,efficiency_boost,効率化,https://img.icons8.com/fluency/240/speedometer.png,進捗+15,flat_damage_bonus,15,,NEUTRAL,0
+0,extra_life,セーフティネット,https://img.icons8.com/fluency/240/heart-with-pulse.png,ライフ+1,max_life_boost,1,,NEUTRAL,1

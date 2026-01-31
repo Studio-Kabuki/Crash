@@ -12,7 +12,7 @@ import {
   ShieldAlert, Sparkles, Ghost, Hexagon,
   CheckCircle2, Info, Award, Undo2, Layers, PlusCircle,
   X, Search, Biohazard, Heart, HeartCrack, Coffee, Coins, ShoppingCart, Check,
-  ZapOff, Star, BookOpen, Settings, RefreshCw, Trash2
+  ZapOff, Star, BookOpen, Settings, RefreshCw, Trash2, Trophy
 } from 'lucide-react';
 
 // フォールバック付き画像コンポーネント
@@ -88,8 +88,11 @@ const App: React.FC = () => {
   // プレイヤーバフ/デバフ
   const [playerBuffs, setPlayerBuffs] = useState<PlayerBuff[]>([]);
 
-  // ヘイスト（行動力）システム
-  const [currentHaste, setCurrentHaste] = useState<number>(defaultHeroStats.sp);
+  // ワークスタイルイベント表示
+  const [workStyleEvent, setWorkStyleEvent] = useState<{ icon: string; title: string; message: string } | null>(null);
+
+  // ヘイスト（行動力）システム - 使用済みヘイストを追跡
+  const [usedHaste, setUsedHaste] = useState<number>(0);
 
   // 手札システム
   const [baseHandSize, setBaseHandSize] = useState<number>(3); // 基礎手札枚数
@@ -139,19 +142,64 @@ const App: React.FC = () => {
 
   const [projectile, setProjectile] = useState<{ icon: string; id: string } | null>(null);
   const [currentEnemy, setCurrentEnemy] = useState<Enemy>({ name: '', icon: '', baseHP: 0, minFloor: 0, maxFloor: 0, dropsAbility: 'N' });
-  const [enemyHealth, setEnemyHealth] = useState<number>(0);
+  const [progress, setProgress] = useState<number>(0);  // 売上（0から増えて目標に達したらクリア）
   const [floatingDamages, setFloatingDamages] = useState<{ id: string; value: number; isMana?: boolean; isPoison?: boolean }[]>([]);
 
   // 手札エリアのドラッグスクロール
   const { containerRef: handContainerRef, shouldPreventClick, containerProps: handContainerProps } = useDragScroll({ threshold: 10 });
 
-  // ヘイスト（行動力）の最大値
+  // デスマーチバフのスタック数を取得
+  const getDeathMarchStacks = (): number => {
+    return playerBuffs.filter(b => b.type === 'deathmarch').reduce((sum, b) => sum + b.value, 0);
+  };
+
+  // バグスタック数を取得
+  const getBugStacks = (): number => {
+    return playerBuffs.filter(b => b.type === 'bug').reduce((sum, b) => sum + b.value, 0);
+  };
+
+  // 休職スタック数を取得（社員-20%/stack）
+  const getKyushokuStacks = (): number => {
+    return playerBuffs.filter(b => b.type === 'kyushoku').reduce((sum, b) => sum + b.value, 0);
+  };
+
+  // 油断スタック数を取得（アタックのヘイスト+5/stack）
+  const getYudanStacks = (): number => {
+    return playerBuffs.filter(b => b.type === 'yudan').reduce((sum, b) => sum + b.value, 0);
+  };
+
+  // 一致団結スタック数を取得（+50%/stack、加算）
+  const getUnityStacks = (): number => {
+    return playerBuffs.filter(b => b.type === 'unity').reduce((sum, b) => sum + b.value, 0);
+  };
+
+  // 一致団結によるダメージ倍率（加算: 1 + stacks * 0.5）
+  const getUnityMultiplier = (): number => {
+    return 1 + getUnityStacks() * 0.5;
+  };
+
+  // 集中スタック数を取得（x1.4/stack、乗算）
+  const getFocusStacks = (): number => {
+    return playerBuffs.filter(b => b.type === 'focus').reduce((sum, b) => sum + b.value, 0);
+  };
+
+  // 集中によるダメージ倍率（乗算: 1.4^stacks）
+  const getFocusMultiplier = (): number => {
+    return Math.pow(1.4, getFocusStacks());
+  };
+
+  // ヘイスト（行動力）の最大値（デスマーチボーナス含む）
   const maxHaste = useMemo(() => {
-    return heroStats.sp + passives.reduce((acc, p) => p.type === 'capacity_boost' ? acc + p.value : acc, 0);
-  }, [heroStats.sp, passives]);
+    const base = heroStats.sp + passives.reduce((acc, p) => p.type === 'capacity_boost' ? acc + p.value : acc, 0);
+    const deathMarchBonus = playerBuffs.filter(b => b.type === 'deathmarch').reduce((sum, b) => sum + b.value, 0) * 10;
+    return base + deathMarchBonus;
+  }, [heroStats.sp, passives, playerBuffs]);
+
+  // 残りヘイスト（表示・判定用）
+  const remainingHaste = maxHaste - usedHaste;
 
   // ヘイストが0以下かどうか
-  const isHasteEmpty = currentHaste <= 0;
+  const isHasteEmpty = remainingHaste <= 0;
 
   const maxMana = useMemo(() => {
     const baseMana = gameData?.heroData.mana ?? defaultMana;
@@ -227,7 +275,7 @@ const App: React.FC = () => {
   };
 
   const debugFullRestore = () => {
-    setCurrentHaste(maxHaste);
+    setUsedHaste(0);
     setMana(maxMana);
   };
 
@@ -283,6 +331,77 @@ const App: React.FC = () => {
     setPlayerBuffs([]);
   };
 
+  // ワークスタイルイベント判定（アタックカード使用後に呼ばれる）
+  const checkWorkStyleEvent = () => {
+    const isBlack = workStyle < 0;
+
+    // ブラック: |workStyle|% の確率で発動
+    // ホワイト: 50以上で (workStyle - 50)% の確率で発動
+    let triggerChance = 0;
+    if (isBlack) {
+      triggerChance = Math.abs(workStyle);
+    } else if (workStyle >= 50) {
+      triggerChance = workStyle - 50;
+    }
+
+    if (triggerChance <= 0 || Math.random() * 100 >= triggerChance) return;
+
+    // イベントタイプを決定（バグ0の時は炎上を除外）
+    const bugCount = getBugStacks();
+
+    let eventTypes: string[];
+    if (bugCount === 0) {
+      // バグがない時は炎上なし
+      eventTypes = isBlack ? ['bug', 'kyushoku'] : ['bug', 'yudan'];
+    } else {
+      eventTypes = isBlack ? ['bug', 'kyushoku', 'enjou'] : ['bug', 'yudan', 'enjou'];
+    }
+
+    const selectedEvent = eventTypes[Math.floor(Math.random() * eventTypes.length)];
+
+    if (selectedEvent === 'bug') {
+      // バグ追加
+      addBuff('BUG');
+      setWorkStyleEvent({
+        icon: '🐛',
+        title: 'バグ発生！',
+        message: isBlack
+          ? '急いで書いたコードにバグが混入...'
+          : 'レビューが甘くてバグが混入...'
+      });
+    } else if (selectedEvent === 'kyushoku') {
+      // 休職追加（ブラックのみ）
+      addBuff('KYUSHOKU');
+      setWorkStyleEvent({
+        icon: '😵',
+        title: '休職発生！',
+        message: '過労で社員が体調を崩した...'
+      });
+    } else if (selectedEvent === 'yudan') {
+      // 油断追加（ホワイトのみ）
+      addBuff('YUDAN');
+      setWorkStyleEvent({
+        icon: '😌',
+        title: '油断発生！',
+        message: '余裕がありすぎて作業がゆっくりに...'
+      });
+    } else if (selectedEvent === 'enjou') {
+      // 炎上！バグを全消費して進捗減少
+      const progressLoss = Math.floor(currentEnemy.baseHP * bugCount * 0.1);
+      setProgress(prev => Math.max(0, prev - progressLoss));
+      // バグを全て削除
+      setPlayerBuffs(prev => prev.filter(b => b.type !== 'bug'));
+      setWorkStyleEvent({
+        icon: '🔥',
+        title: '炎上発生！',
+        message: `バグが多すぎて進捗が下がった！ (進捗-${progressLoss})`
+      });
+    }
+
+    // イベント表示を4秒後に消す（カード使用でも消える）
+    setTimeout(() => setWorkStyleEvent(null), 4000);
+  };
+
   // CSVからゲームデータをロード
   useEffect(() => {
     loadGameData().then(data => {
@@ -291,30 +410,37 @@ const App: React.FC = () => {
     });
   }, []);
 
-  const isTargetMet = enemyHealth <= 0;
+  const isTargetMet = progress >= currentEnemy.baseHP && currentEnemy.baseHP > 0;
 
   const getCardPrice = (rarity: Rarity) => {
-    if (rarity === 'SSR') return 100;
-    if (rarity === 'SR') return 80;
-    if (rarity === 'R') return 50;
-    return 30;
+    if (rarity === 'BLACK') return 40;
+    if (rarity === 'WHITE') return 40;
+    return 30;  // NEUTRAL
   };
 
   const getPassivePrice = (rarity: Rarity) => {
-    if (rarity === 'SSR') return 100;
-    if (rarity === 'R') return 60;
-    return 40;
+    if (rarity === 'BLACK') return 50;
+    if (rarity === 'WHITE') return 50;
+    return 40;  // NEUTRAL
   };
 
   const LIFE_RECOVERY_PRICE = 50;
   const CARD_REMOVE_PRICE = 50;
 
-  // レアリティに基づく重み付け抽選
+  // workStyle に基づく重み付け抽選
+  // ブラック度が高い→BLACKが出やすい、ホワイト度が高い→WHITEが出やすい
   const weightedRandomSelect = <T extends { rarity: Rarity }>(items: T[], count: number): T[] => {
     const getWeight = (rarity: Rarity) => {
-      if (rarity === 'SSR') return 1;  // 低確率
-      if (rarity === 'R') return 3;    // 中確率
-      return 6;                         // C: 高確率
+      const baseWeight = 3;
+      const bonus = Math.abs(workStyle) / 20;  // -100~+100 → 0~5のボーナス
+
+      if (rarity === 'BLACK') {
+        return workStyle < 0 ? baseWeight + bonus : Math.max(1, baseWeight - bonus);
+      }
+      if (rarity === 'WHITE') {
+        return workStyle > 0 ? baseWeight + bonus : Math.max(1, baseWeight - bonus);
+      }
+      return baseWeight;  // NEUTRAL は常に均等
     };
 
     const selected: T[] = [];
@@ -430,10 +556,10 @@ const App: React.FC = () => {
   }, []);
 
   const getEnemyForLevel = (lvl: number) => {
-      if (!gameData) return { name: '', icon: '', baseHP: 0, minFloor: 0, maxFloor: 0 };
-      const candidates = gameData.enemies.filter(e => lvl >= e.minFloor && lvl <= e.maxFloor);
-      const pool = candidates.length > 0 ? candidates : [gameData.enemies[gameData.enemies.length - 1]];
-      return pool[Math.floor(Math.random() * pool.length)];
+      if (!gameData) return { name: '', icon: '', baseHP: 0, minFloor: 0, maxFloor: 0, dropsAbility: 'N' as const };
+      // 1階層1種類: 該当フロアの最初の敵を返す
+      const enemy = gameData.enemies.find(e => lvl >= e.minFloor && lvl <= e.maxFloor);
+      return enemy || gameData.enemies[gameData.enemies.length - 1];
   };
 
   const startGame = () => {
@@ -466,12 +592,12 @@ const App: React.FC = () => {
     setGameState('PLAYING');
     setIsDeckOverlayOpen(false);
     setIsEnemyPoisoned(false);
-    setCurrentHaste(heroData?.stats.sp ?? defaultHeroStats.sp);
+    setUsedHaste(0);
     setPlayerBuffs([]);
 
     const initialEnemy = getEnemyForLevel(1);
     setCurrentEnemy(initialEnemy);
-    setEnemyHealth(initialEnemy.baseHP);
+    setProgress(0);  // 進捗は0から開始
     setBattleEvent(initialEnemy.trait || (gameData?.traits['NEUTRAL'] ?? defaultEvent));
 
     // 初期手札を引く（パッシブがないのでbaseHandSize枚）
@@ -493,14 +619,14 @@ const App: React.FC = () => {
         setGameState('PLAYING');
         setIsDeckOverlayOpen(false);
         setIsEnemyPoisoned(false);
-        setCurrentHaste(heroStats.sp);
+        setUsedHaste(0);
         setPlayerBuffs([]);
 
         const battleDeck = shuffle(sourceDeck);
 
         const nextEnemy = getEnemyForLevel(nextLvl);
         setCurrentEnemy(nextEnemy);
-        setEnemyHealth(nextEnemy.baseHP);
+        setProgress(0);  // 進捗は0から開始
         setBattleEvent(nextEnemy.trait || (gameData?.traits['NEUTRAL'] ?? defaultEvent));
 
         // handSize枚引く（デッキから引いた分を除く）
@@ -518,15 +644,13 @@ const App: React.FC = () => {
     const selectedCards = weightedRandomSelect(gameData.skillPool, 5);
     setShopCards(selectedCards.map(s => createSkillWithId(s)));
 
-    // SR/SSRは同じアビリティ（同じid）を重複して持てない
-    const ownedHighRarityIds = passives
-      .filter(p => p.rarity === 'SR' || p.rarity === 'SSR')
-      .map(p => p.id);
+    // maxStack に基づいて所持制限をチェック
+    const ownedCounts = new Map<string, number>();
+    passives.forEach(p => ownedCounts.set(p.id, (ownedCounts.get(p.id) || 0) + 1));
     const filteredPassivePool = (gameData.passivePool || []).filter(p => {
-      if (p.rarity === 'SR' || p.rarity === 'SSR') {
-        return !ownedHighRarityIds.includes(p.id);
-      }
-      return true;
+      if (p.maxStack === 0) return true;  // 無制限
+      const owned = ownedCounts.get(p.id) || 0;
+      return owned < p.maxStack;
     });
 
     // Generate 3 random passives with rarity weighting
@@ -686,7 +810,27 @@ const App: React.FC = () => {
     return baseDoubleBuff ? baseDoubleBuff.value : 0;
   };
 
-  // スキルの基本ダメージを計算（基礎ダメージも倍率適用）
+  // 有効社員数を計算（加算→乗算の順序、最低0）
+  const getEffectiveEmployees = (): number => {
+    // 1. 加算を全て計算
+    const baseEmployees = heroStats.employees;
+    const passiveAdd = passives.filter(p => p.type === 'employee_add').reduce((sum, p) => sum + p.value, 0);
+    const strengthAdd = getStrengthValue();
+    const totalAdd = baseEmployees + passiveAdd + strengthAdd;
+
+    // 2. 倍率を全て掛け算（employee_mult は %値、50 = 0.5倍）
+    const multipliers = passives.filter(p => p.type === 'employee_mult').map(p => p.value / 100);
+    const totalMult = multipliers.reduce((acc, m) => acc * m, 1.0);
+
+    // 3. 休職デバフ（1スタックにつき-20%）
+    const kyushokuStacks = getKyushokuStacks();
+    const kyushokuMult = Math.max(0, 1 - kyushokuStacks * 0.2);
+
+    // 4. 最低値は0
+    return Math.max(0, Math.floor(totalAdd * totalMult * kyushokuMult));
+  };
+
+  // スキルの基本ダメージを計算
   const getSkillBaseDamage = (s: Skill, applyBaseDouble: boolean = true) => {
     let baseDmg = s.baseDamage || 0;
 
@@ -695,8 +839,8 @@ const App: React.FC = () => {
       baseDmg = baseDmg * 2;
     }
 
-    // 筋力バフを社員数に加算
-    const effectiveEmployees = heroStats.employees + getStrengthValue();
+    // 有効社員数を取得（パッシブ効果適用済み）
+    const effectiveEmployees = getEffectiveEmployees();
 
     // 社員数ダメージ計算
     const employeeDmg = Math.floor(effectiveEmployees * (s.employeeRatio || 0) / 100);
@@ -709,16 +853,20 @@ const App: React.FC = () => {
     return Math.max(0, totalDamage);
   };
 
-  // バフを集約（同じタイプのバフをまとめてvalueを合計）
-  const getAggregatedBuffs = (): PlayerBuff[] => {
-    const buffMap = new Map<string, PlayerBuff>();
+  // バフを集約（同じタイプのバフをまとめてvalueを合計、スタック数も追跡）
+  interface AggregatedBuff extends PlayerBuff {
+    stackCount: number;
+  }
+  const getAggregatedBuffs = (): AggregatedBuff[] => {
+    const buffMap = new Map<string, AggregatedBuff>();
     playerBuffs.forEach(buff => {
       const key = `${buff.type}-${buff.stat || ''}`;
       if (buffMap.has(key)) {
         const existing = buffMap.get(key)!;
         existing.value += buff.value;
+        existing.stackCount += 1;
       } else {
-        buffMap.set(key, { ...buff });
+        buffMap.set(key, { ...buff, stackCount: 1 });
       }
     });
     return Array.from(buffMap.values());
@@ -743,7 +891,7 @@ const App: React.FC = () => {
     const lastCard = stack[stack.length - 1];
     return lastCard.cardType === 'attack';
   };
-  const enemyDamageTaken = currentEnemy.baseHP - enemyHealth;
+  const enemyDamageTaken = progress;  // 進捗 = 与えたダメージ量
 
   const calculateComboPower = (skills: Skill[], chargeMultiplier: number = 1) => {
     let basePower = 0;
@@ -774,92 +922,82 @@ const App: React.FC = () => {
     return finalPower;
   };
 
-  const handleEnemyAttack = (currentStack: Skill[], currentDeck: Skill[], currentHand: Skill[]) => {
-    // 無敵判定: パリィや将来の無敵バフをチェック
-    const hasParry = playerBuffs.some(b => b.type === 'parry');
-    const hasInvincibility = playerBuffs.some(b => b.type === 'invincible');
-    const isInvincible = hasParry || hasInvincibility;
+  const handleDeadline = (currentGold?: number) => {
+    // 締切判定: ゴールド >= ノルマ（目標売上）ならクリア
+    const quota = currentEnemy.baseHP;
+    // 引数で渡された場合はそれを使う（state更新が反映されていない場合対策）
+    const goldToCheck = currentGold ?? gold;
 
-    // パリィ成功: 消費して筋力+50
-    if (hasParry) {
-      setPlayerBuffs(prev => prev.filter(b => b.type !== 'parry'));
-      addBuff('STRENGTH', 50);
-    }
-
-    // 無敵バフも消費（スタック数を1減らす）
-    if (hasInvincibility) {
-      setPlayerBuffs(prev => {
-        const idx = prev.findIndex(b => b.type === 'invincible');
-        if (idx === -1) return prev;
-        const buff = prev[idx];
-        if (buff.value <= 1) {
-          return prev.filter((_, i) => i !== idx);
-        }
-        return prev.map((b, i) => i === idx ? { ...b, value: b.value - 1 } : b);
-      });
-    }
-
-    // 無敵時はダメージを受けずにターンリセットのみ
-    if (isInvincible) {
-      setIsMonsterAttacking(true);
-      setTimeout(() => {
-        setIsMonsterAttacking(false);
-        setTurnResetMessage(true);
-        setCurrentHaste(heroStats.sp);
-        setTimeout(() => setTurnResetMessage(false), 1000);
-      }, 800);
-      return;
-    }
-
-    // 通常のダメージ処理
     setIsMonsterAttacking(true);
     setTimeout(() => {
-      setTimeout(() => {
-        setIsMonsterAttacking(false);
+      setIsMonsterAttacking(false);
+
+      if (goldToCheck >= quota) {
+        // ノルマ達成！クリア処理
+        setTimeout(() => {
+          const dropType = currentEnemy?.dropsAbility || 'N';
+          if (dropType === 'Y') {
+            // エリート: 全レアリティアビリティ→カード
+            setGameState('BOSS_VICTORY');
+            generateShopOptions(false);
+            setIsAbilityRewardOverlayOpen(true);
+          } else if (dropType === 'C') {
+            // ザコ: コモンアビリティのみ→カードなし
+            setGameState('ABILITY_REWARD');
+            generateShopOptions(true);
+            setIsAbilityRewardOverlayOpen(true);
+          } else {
+            // 通常: カードのみ
+            generateCardRewards();
+            setGameState('CARD_REWARD');
+            setIsCardRewardOverlayOpen(true);
+          }
+        }, 400);
+      } else {
+        // ノルマ未達成！ライフ減少
         setIsPlayerTakingDamage(true);
         const newLife = life - 1;
         setLife(newLife);
+        // デスマーチバフを全て解除
+        setPlayerBuffs(prev => prev.filter(b => b.type !== 'deathmarch'));
         setTimeout(() => {
           setIsPlayerTakingDamage(false);
           if (newLife <= 0) {
             setGameState('GAME_OVER');
           } else {
+            // ライフが残っていれば続行（追加ターン）
             setTurnResetMessage(true);
-            setCurrentHaste(heroStats.sp);
-            setTimeout(() => {
-              setTurnResetMessage(false);
-            }, 1000);
+            setUsedHaste(0);
+            setTimeout(() => setTurnResetMessage(false), 1000);
           }
         }, 500);
-      }, 400);
+      }
     }, 800);
   };
 
-  const isStuckDueToMana = hand.length > 0 && hand.every(s => s.manaCost > mana);
+  // 後方互換性のためのエイリアス
+  const handleEnemyAttack = handleDeadline;
 
   const handleRest = () => {
-    if (currentHaste <= 0 || turnResetMessage || isMonsterAttacking) return;
+    if (remainingHaste <= 0 || turnResetMessage || isMonsterAttacking) return;
 
-    const mId = generateId();
-    // マナ回復を最大値（maxMana）までに制限
-    setMana(prev => Math.min(maxMana, prev + 30));
-    setFloatingDamages(prev => [...prev, { id: mId, value: 30, isMana: true }]);
-    setTimeout(() => setFloatingDamages(p => p.filter(d => d.id !== mId)), 1000);
-
-    // UIボタンからの精神統一はヘイストを10消費（スタックには追加しない）
+    // 休憩ボタンはヘイストを10消費して何もしない（ターンを終わらせたい時用）
     const restDelay = 10;
-    const newHaste = Math.round(currentHaste - restDelay);
-    setCurrentHaste(newHaste);
+    const newUsedHaste = Math.round(usedHaste + restDelay);
+    setUsedHaste(newUsedHaste);
 
-    if (newHaste <= 0) {
-        handleEnemyAttack(stack, deck, hand);
+    if (newUsedHaste >= maxHaste) {
+        handleDeadline(gold);  // 休憩中はゴールド変わらないので現在値
     }
   };
 
   const selectSkill = (skill: Skill) => {
-    if (currentHaste <= 0 || mana < skill.manaCost || isTargetMet || isMonsterAttacking || turnResetMessage || isShuffling || isProcessingCard) return;
+    if (remainingHaste <= 0 || isMonsterAttacking || turnResetMessage || isShuffling || isProcessingCard) return;
 
     setIsProcessingCard(true); // カード処理開始
+
+    // イベント表示を消す
+    setWorkStyleEvent(null);
 
     // パリィバフは次のカード使用で消える（敵攻撃時の処理は handleEnemyAttack で）
     setPlayerBuffs(prev => prev.filter(b => b.type !== 'parry'));
@@ -891,8 +1029,9 @@ const App: React.FC = () => {
       setWorkStyle(prev => Math.max(-100, Math.min(100, prev + skill.workStyleChange!)));
     }
 
-    // ディレイ計算
-    const actualDelay = skill.delay;
+    // ディレイ計算（油断デバフ: アタックカードのヘイスト+5/stack）
+    const yudanPenalty = skill.cardType === 'attack' ? getYudanStacks() * 5 : 0;
+    const actualDelay = skill.delay + yudanPenalty;
 
     setTimeout(() => {
         setIsMonsterShaking(true);
@@ -909,9 +1048,9 @@ const App: React.FC = () => {
           setMana(prev => Math.min(maxMana, prev - skill.manaCost));
         }
 
-        // ヘイスト消費
-        const newHaste = Math.round(currentHaste - actualDelay);
-        setCurrentHaste(newHaste);
+        // ヘイスト消費（使用済みに加算）
+        const newUsedHaste = Math.round(usedHaste + actualDelay);
+        setUsedHaste(newUsedHaste);
 
         let newStack = [...stack, skill, ...removedCards];
 
@@ -959,8 +1098,19 @@ const App: React.FC = () => {
           return prev;
         });
 
-        const newTotalPower = calculateComboPower(newStack);
-        let damageDealt = (newTotalPower - currentComboPower) * repeatCount;
+        // 現在のカードのダメージを直接計算（休職などで社員数が変わっても過去カードに影響しない）
+        const currentCardDamage = getSkillBaseDamage(skill);
+        let damageDealt = currentCardDamage * repeatCount;
+
+        // スタック内の除去カード（ファイナルスラッシュ用）のダメージも追加
+        const removedCardsDamage = removedCards.reduce((sum, card) => sum + getSkillBaseDamage(card), 0);
+        damageDealt += removedCardsDamage;
+
+        // バフによるダメージ倍率を適用
+        // 計算式: (ベース + 社員数ダメージ) × 一致団結(加算) × 集中(乗算)
+        damageDealt = Math.floor(damageDealt * getUnityMultiplier() * getFocusMultiplier());
+
+        const newTotalPower = currentComboPower + damageDealt;
         const poisonDmg = isEnemyPoisoned ? 30 : 0;
 
         // mana_consume_damage: 消費士気×係数のダメージを追加
@@ -980,9 +1130,12 @@ const App: React.FC = () => {
         // ダメージは0以上に制限（マイナスダメージによる回復を防ぐ）
         const actualDamage = Math.max(0, finalDamage);
 
-        // 新しいenemyHealthを計算（勝利判定に使用）
-        const newEnemyHealth = Math.max(0, enemyHealth - actualDamage);
-        setEnemyHealth(newEnemyHealth);
+        // 進捗を加算（ゲージ表示用、目標超過も許可）
+        const newProgress = progress + actualDamage;
+        setProgress(newProgress);
+        // 稼いだ分だけゴールド（売上）も増える
+        const newGold = gold + actualDamage;
+        setGold(newGold);
         setCurrentComboPower(newTotalPower);
         setStack(newStack);
 
@@ -994,6 +1147,11 @@ const App: React.FC = () => {
           setTimeout(() => setFloatingDamages(p => p.filter(d => d.id !== pId)), 1000);
         }
         setTimeout(() => setFloatingDamages(prev => prev.filter(d => d.id !== damageId)), 1000);
+
+        // ワークスタイルイベント判定は現在無効化
+        // if (skill.cardType === 'attack') {
+        //   checkWorkStyleEvent();
+        // }
 
         // カード効果をrepeatCount回実行（ためるバフ対応）
         if (skill.effect && !isEffectDisabled(skill)) {
@@ -1155,30 +1313,8 @@ const App: React.FC = () => {
             setMana(prev => Math.max(0, prev - battleEvent.manaDrainAmount!));
         }
 
-        if (newEnemyHealth <= 0) {
-            setGold(prev => prev + 30);
-            setTimeout(() => {
-                const dropType = currentEnemy?.dropsAbility || 'N';
-                if (dropType === 'Y') {
-                    // エリート: 全レアリティアビリティ→カード
-                    setGameState('BOSS_VICTORY');
-                    generateShopOptions(false);
-                    setIsAbilityRewardOverlayOpen(true);
-                } else if (dropType === 'C') {
-                    // ザコ: コモンアビリティのみ→カードなし
-                    setGameState('ABILITY_REWARD');
-                    generateShopOptions(true);
-                    setIsAbilityRewardOverlayOpen(true);
-                } else {
-                    // 通常: カードのみ
-                    generateCardRewards();
-                    setGameState('CARD_REWARD');
-                    setIsCardRewardOverlayOpen(true);
-                }
-            }, 600);
-            setIsProcessingCard(false); // カード処理終了
-            return;
-        }
+        // 目標達成でも即クリアしない（追加開発可能）
+        // 締切時にゴールドでクリア判定
 
         // カードを使ったら1枚ドロー
         const drawResult = drawCards(1, newHand, newDeck, newStack);
@@ -1186,9 +1322,9 @@ const App: React.FC = () => {
         setDeck(drawResult.newDeck);
         setStack(drawResult.newStack);
 
-        // ヘイストが0以下になったら敵の攻撃
-        if (newHaste <= 0) {
-             handleEnemyAttack(drawResult.newStack, drawResult.newDeck, drawResult.newHand);
+        // ヘイストを使い切ったら締切判定
+        if (newUsedHaste >= maxHaste) {
+             handleDeadline(newGold);
         }
         setIsProcessingCard(false); // カード処理終了
     }, 450);
@@ -1818,7 +1954,7 @@ const App: React.FC = () => {
                 <h3 className="text-sm font-bold text-slate-400 uppercase tracking-widest mb-3 pb-2 border-b border-slate-800">クイックアクション</h3>
                 <div className="flex flex-wrap gap-2">
                   <button onClick={() => { debugFullRestore(); }} className="flex items-center gap-2 px-4 py-2 bg-green-900/50 border border-green-600 rounded-lg text-green-400 font-bold text-sm hover:bg-green-800/50 transition-all">
-                    <Heart size={16} /> ヘイスト・マナ全回復
+                    <Heart size={16} /> 締切・マナ全回復
                   </button>
                   <button onClick={() => { debugRerollHand(); }} className="flex items-center gap-2 px-4 py-2 bg-blue-900/50 border border-blue-600 rounded-lg text-blue-400 font-bold text-sm hover:bg-blue-800/50 transition-all">
                     <RefreshCw size={16} /> 手札リロール
@@ -1973,10 +2109,12 @@ const App: React.FC = () => {
                             <SafeImage src={currentEnemy.icon} alt={currentEnemy.name} className="w-full h-full object-contain" />
                         </div>
 
-                        {/* HPゲージ（敵アイコンの下） */}
+                        {/* ゴールドvsノルマゲージ（敵アイコンの下） */}
                         <div className="w-40 md:w-64 h-4 md:h-5 bg-slate-950 rounded border border-slate-800 shadow-2xl overflow-hidden relative mt-1">
-                            <div className={`h-full transition-all duration-500 ${enemyHealth / currentEnemy.baseHP > 0.5 ? 'bg-gradient-to-r from-green-600 to-green-400' : 'bg-gradient-to-r from-red-600 to-red-400'}`} style={{ width: `${(enemyHealth / currentEnemy.baseHP) * 100}%` }}></div>
-                            <span className="absolute inset-0 flex items-center justify-center text-[0.75rem] font-black text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)] uppercase tracking-widest">HP {Math.ceil(enemyHealth)} / {currentEnemy.baseHP}</span>
+                            <div className={`h-full transition-all duration-500 ${gold >= currentEnemy.baseHP ? 'bg-gradient-to-r from-green-500 to-emerald-400' : 'bg-gradient-to-r from-amber-600 to-yellow-400'}`} style={{ width: `${Math.min(100, (gold / currentEnemy.baseHP) * 100)}%` }}></div>
+                            <span className="absolute inset-0 flex items-center justify-center text-[0.625rem] font-black text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)]">
+                              <Coins className="w-3 h-3 mr-1" /> {gold} / ノルマ {currentEnemy.baseHP}
+                            </span>
                         </div>
 
                         {/* 敵のtrait表示 */}
@@ -1994,6 +2132,26 @@ const App: React.FC = () => {
                           <div key={dmg.id} className={`absolute z-50 pointer-events-none damage-pop font-black drop-shadow-[0_0_10px_rgba(0,0,0,0.5)] font-fantasy ${dmg.isMana ? 'text-blue-400 text-xl' : dmg.isPoison ? 'text-green-500 text-lg' : 'text-red-500 text-2xl'}`} style={{ top: '45%' }}>{dmg.isMana ? `+${dmg.value}` : `-${dmg.value}`}</div>
                         ))}
                         {projectile && <div className="absolute flex items-center justify-center pointer-events-none z-50"><SafeImage src={projectile.icon} alt="attack" className="w-12 h-12 md:w-20 md:h-20 object-contain projectile" /></div>}
+
+                        {/* ワークスタイルイベント表示 */}
+                        {workStyleEvent && (
+                          <div className="absolute inset-0 flex items-center justify-center z-[100] pointer-events-none animate-in fade-in zoom-in duration-300">
+                            <div className={`px-6 py-4 rounded-xl border-2 shadow-2xl backdrop-blur-sm ${
+                              workStyleEvent.icon === '🔥' ? 'bg-red-900/90 border-red-500' :
+                              workStyleEvent.icon === '🐛' ? 'bg-yellow-900/90 border-yellow-500' :
+                              workStyleEvent.icon === '😵' ? 'bg-purple-900/90 border-purple-500' :
+                              'bg-blue-900/90 border-blue-500'
+                            }`}>
+                              <div className="flex items-center gap-3">
+                                <span className="text-4xl">{workStyleEvent.icon}</span>
+                                <div>
+                                  <p className="text-xl font-black text-white">{workStyleEvent.title}</p>
+                                  <p className="text-sm text-slate-300">{workStyleEvent.message}</p>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        )}
                     </div>
                 )}
 
@@ -2181,122 +2339,88 @@ const App: React.FC = () => {
                 <div className="flex flex-col gap-2 flex-1">
                     {/* HASTEとMANAゲージ */}
                     <div className="flex flex-col gap-2 w-full">
-                      {/* HASTEゲージ + ライフ表示 */}
+                      {/* 締切ゲージ */}
                       <div className="flex flex-col gap-0">
-                        {/* ライフ表示 */}
-                        <div className="flex justify-end items-center mb-0.5">
-                          <Tooltip content={"ライフが0になると敗北。\nダメージを受けると、手札の最大枚数までカードを引ける。"}>
-                            <div className="flex items-center gap-1 cursor-pointer hover:bg-slate-800/50 rounded px-1 transition-colors">
-                              <span className="text-[0.5rem] font-black text-slate-400 uppercase">Life</span>
-                              <div className="flex items-center gap-0.5">
-                                {[...Array(maxLife)].map((_, i) => (
-                                  <Heart
-                                    key={i}
-                                    className={`w-4 h-4 transition-all duration-300 ${
-                                      i < life
-                                        ? 'text-red-500 fill-red-500 drop-shadow-[0_0_4px_rgba(239,68,68,0.5)]'
-                                        : 'text-slate-700 fill-slate-800'
-                                    }`}
-                                  />
-                                ))}
-                              </div>
-                            </div>
-                          </Tooltip>
-                        </div>
-
                         {/* ゲージ行 */}
                         <div className="flex items-center gap-2">
-                          <Tooltip content={"ヘイストが最大になるとライフが減る。\nライフが減ると最大枚数までカードを引く。"}>
+                          <Tooltip content={"締切ゲージが最大になると締切判定。\nノルマ達成ならクリア、未達成なら敗北。"}>
                             <div className="flex items-center gap-1 w-14 cursor-pointer select-none hover:bg-slate-800/50 rounded px-1 -mx-1 transition-colors">
                               <Zap className="w-4 h-4 text-slate-300 pointer-events-none" />
-                              <span className="text-[0.5rem] font-black text-slate-300 pointer-events-none">HASTE</span>
+                              <span className="text-[0.5rem] font-black text-slate-300 pointer-events-none">締切</span>
                             </div>
                           </Tooltip>
-                          <div className="flex-1 h-6 bg-slate-950 rounded-l border border-slate-700 relative overflow-hidden">
-                            {/* 10区切りグリッド */}
+                          <div className="flex-1 h-6 bg-slate-950 rounded border border-slate-700 relative overflow-hidden">
+                            {/* 1区切りグリッド */}
                             <div className="absolute inset-0 flex z-10">
-                              {[...Array(Math.ceil(maxHaste / 10))].map((_, i) => (
+                              {[...Array(maxHaste)].map((_, i) => (
                                 <div key={i} className="flex-1 border-r border-slate-600 last:border-r-0" />
                               ))}
                             </div>
                             {/* ゲージ本体（消費量を表示：0から始まりMAXに向かって増加） */}
                             <div
                               className={`h-full transition-all duration-300 relative ${
-                                (maxHaste - currentHaste) / maxHaste > 0.8
+                                usedHaste / maxHaste > 0.8
                                   ? 'bg-gradient-to-r from-red-500 to-red-300'
                                   : 'bg-gradient-to-r from-slate-400 to-white'
                               }`}
-                              style={{ width: `${((maxHaste - currentHaste) / maxHaste) * 100}%` }}
+                              style={{ width: `${(usedHaste / maxHaste) * 100}%` }}
                             />
                             {/* 数値表示（消費量 / 最大値） */}
                             <span className="absolute inset-0 flex items-center justify-center text-[0.625rem] font-black text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)] z-20">
-                              {maxHaste - currentHaste} / {maxHaste}
+                              {usedHaste} / {maxHaste}
                             </span>
-                          </div>
-                          {/* ゲージ右端 → ライフへの矢印 */}
-                          <div className={`flex items-center justify-center h-6 px-1.5 rounded-r border border-l-0 border-red-800 ${
-                            (maxHaste - currentHaste) / maxHaste > 0.8
-                              ? 'bg-red-600 animate-pulse'
-                              : 'bg-red-950'
-                          }`}>
-                            <HeartCrack className="w-4 h-4 text-red-300" />
-                            <span className="text-[0.5rem] font-black text-red-300">-1</span>
                           </div>
                         </div>
                       </div>
 
                       {/* MANAゲージ */}
                       <div className="flex items-center gap-2">
-                        <Tooltip content={"一部のカードの使用時に消費する。\n戦闘終了時に回復する。\n上限を超えて回復は出来ない。"}>
+                        {/* ブラック側アイコン */}
+                        <Tooltip content="ブラック度（-100が最大）">
                           <div className="flex items-center gap-1 w-14 cursor-pointer select-none hover:bg-slate-800/50 rounded px-1 -mx-1 transition-colors">
-                            <Hexagon className="w-4 h-4 text-blue-400 pointer-events-none" />
-                            <span className="text-[0.5rem] font-black text-blue-400 pointer-events-none">MANA</span>
+                            <span className="text-lg pointer-events-none">😈</span>
+                            <span className="text-[0.5rem] font-black text-red-400 pointer-events-none">BLACK</span>
                           </div>
                         </Tooltip>
+                        {/* ホワイト・ブラック度ゲージ（中央が0） */}
                         <div className="flex-1 h-6 bg-slate-950 rounded border border-slate-700 relative overflow-hidden">
-                          <div
-                            className="h-full bg-gradient-to-r from-blue-600 to-blue-400 transition-all duration-300"
-                            style={{ width: `${(mana / maxMana) * 100}%` }}
-                          />
-                          <span className="absolute inset-0 flex items-center justify-center text-[0.625rem] font-black text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)]">
-                            {mana} / {maxMana}
+                          {/* 中央線 */}
+                          <div className="absolute left-1/2 top-0 bottom-0 w-0.5 bg-slate-500 z-10" />
+                          {/* ブラック側（左へ伸びる） */}
+                          {workStyle < 0 && (
+                            <div
+                              className="absolute right-1/2 h-full bg-gradient-to-l from-red-600 to-red-800 transition-all duration-300"
+                              style={{ width: `${Math.abs(workStyle) / 2}%` }}
+                            />
+                          )}
+                          {/* ホワイト側（右へ伸びる） */}
+                          {workStyle > 0 && (
+                            <div
+                              className="absolute left-1/2 h-full bg-gradient-to-r from-green-600 to-green-400 transition-all duration-300"
+                              style={{ width: `${workStyle / 2}%` }}
+                            />
+                          )}
+                          <span className="absolute inset-0 flex items-center justify-center text-[0.625rem] font-black text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)] z-20">
+                            {workStyle > 0 ? `+${workStyle}` : workStyle}
                           </span>
                         </div>
-                        {/* 空のスペーサー（HASTEと揃えるため） */}
-                        <div className="flex items-center justify-center h-6 px-1.5 opacity-0">
-                          <HeartCrack className="w-4 h-4" />
-                          <span className="text-[0.5rem] font-black">-1</span>
-                        </div>
+                        {/* ホワイト側アイコン */}
+                        <Tooltip content="ホワイト度（+100が最大）">
+                          <div className="flex items-center justify-center h-6 px-1.5 cursor-pointer select-none hover:bg-slate-800/50 rounded transition-colors">
+                            <span className="text-lg pointer-events-none">😇</span>
+                            <span className="text-[0.5rem] font-black text-green-400 pointer-events-none">WHITE</span>
+                          </div>
+                        </Tooltip>
                       </div>
 
                       {/* 基礎パラメータとBUFFS */}
                       <div className="flex items-center justify-between gap-2 mt-1">
-                        {/* 基礎パラメータ 社員数/ワークスタイル */}
+                        {/* 基礎パラメータ 社員数 */}
                         <div className="flex items-center gap-2">
-                          <span className="text-[0.5rem] font-black text-slate-500">基礎パラメータ：</span>
                           <Tooltip content={"社員数が多いほど、一部のカードの進捗が増える。\n採用活動などで増やせる。"}>
                             <div className="flex items-center gap-1 px-2 py-0.5 bg-amber-950/50 border border-amber-700/50 rounded cursor-pointer hover:bg-amber-900/50 transition-colors">
-                              <span className="text-[0.5rem] font-black text-amber-400">社員</span>
-                              <span className="text-[0.625rem] font-black text-amber-300">{heroStats.employees}</span>
-                            </div>
-                          </Tooltip>
-                          <Tooltip content={`ホワイト/ブラック度: ${workStyle}\n+がホワイト、-がブラック\nカードによって変化する`}>
-                            <div className={`flex items-center gap-1 px-2 py-0.5 rounded cursor-pointer transition-colors ${
-                              workStyle >= 20
-                                ? 'bg-green-950/50 border border-green-700/50 hover:bg-green-900/50'
-                                : workStyle <= -20
-                                  ? 'bg-red-950/50 border border-red-700/50 hover:bg-red-900/50'
-                                  : 'bg-slate-800/50 border border-slate-600/50 hover:bg-slate-700/50'
-                            }`}>
-                              <span className={`text-[0.5rem] font-black ${
-                                workStyle >= 50 ? 'text-green-400' :
-                                workStyle >= 20 ? 'text-green-300' :
-                                workStyle > -20 ? 'text-slate-400' :
-                                workStyle > -50 ? 'text-red-300' : 'text-red-400'
-                              }`}>{workStyle >= 50 ? 'ホワイト' : workStyle >= 20 ? 'ややホワイト' : workStyle > -20 ? '普通' : workStyle > -50 ? 'ややブラック' : 'ブラック'}</span>
-                              <span className={`text-[0.625rem] font-black ${
-                                workStyle >= 0 ? 'text-green-300' : 'text-red-300'
-                              }`}>{workStyle > 0 ? `+${workStyle}` : workStyle}</span>
+                              <span className="text-[0.5rem] font-black text-amber-400">社員数</span>
+                              <span className="text-[0.625rem] font-black text-amber-300">{getEffectiveEmployees()}</span>
                             </div>
                           </Tooltip>
                         </div>
@@ -2316,6 +2440,14 @@ const App: React.FC = () => {
                                       ? 'bg-cyan-900/50 border-cyan-600'
                                       : buff.type === 'strength'
                                       ? 'bg-orange-900/50 border-orange-600'
+                                      : buff.type === 'deathmarch'
+                                      ? 'bg-orange-900/50 border-orange-600'
+                                      : buff.type === 'bug'
+                                      ? 'bg-yellow-900/50 border-yellow-600'
+                                      : buff.type === 'kyushoku'
+                                      ? 'bg-purple-900/50 border-purple-600'
+                                      : buff.type === 'yudan'
+                                      ? 'bg-blue-900/50 border-blue-600'
                                       : 'bg-red-900/50 border-red-600'
                                   }`}
                                 >
@@ -2329,12 +2461,25 @@ const App: React.FC = () => {
                                       ? 'text-cyan-400'
                                       : buff.type === 'strength'
                                       ? 'text-orange-400'
+                                      : buff.type === 'deathmarch'
+                                      ? 'text-orange-400'
+                                      : buff.type === 'bug'
+                                      ? 'text-yellow-400'
+                                      : buff.type === 'kyushoku'
+                                      ? 'text-purple-400'
+                                      : buff.type === 'yudan'
+                                      ? 'text-blue-400'
                                       : 'text-red-400'
                                   }`}>
                                     {buff.name}
+                                    {buff.stackCount > 1 && ` x${buff.stackCount}`}
                                     {buff.stat && ` +${buff.value}`}
                                     {buff.type === 'base_damage_boost' && ` x${buff.value}`}
                                     {buff.type === 'strength' && ` ${buff.value}`}
+                                    {buff.type === 'deathmarch' && ` (+${buff.stackCount * 10}締切)`}
+                                    {buff.type === 'bug' && ` (炎上時-${buff.stackCount * 10}%)`}
+                                    {buff.type === 'kyushoku' && ` (-${buff.stackCount * 20}%社員)`}
+                                    {buff.type === 'yudan' && ` (+${buff.stackCount * 5}締切)`}
                                   </span>
                                 </div>
                               </Tooltip>
@@ -2357,13 +2502,15 @@ const App: React.FC = () => {
                                         <Card
                                             skill={item}
                                             onClick={() => { if (!shouldPreventClick()) selectSkill(item); }}
-                                            disabled={isTargetMet || isMonsterAttacking || turnResetMessage || isShuffling}
+                                            disabled={isMonsterAttacking || turnResetMessage || isShuffling}
                                             mana={mana}
-                                            currentHaste={currentHaste}
+                                            currentHaste={remainingHaste}
                                             heroStats={heroStats}
                                             damageMultiplier={1.0}
                                             effectsDisabled={isEffectDisabled(item)}
                                             enemyDamageTaken={enemyDamageTaken}
+                                            effectiveEmployees={getEffectiveEmployees()}
+                                            extraDelay={getYudanStacks() * 5}
                                         />
                                     </div>
                                 ))}
@@ -2376,45 +2523,56 @@ const App: React.FC = () => {
                         )}
                     </div>
                     {/* アクションボタン */}
-                    <p className="text-center text-[10px] text-white mt-0.5">マナやヘイストが足りなくなったとき用↓</p>
+                    <p className="text-center text-[10px] text-white mt-0.5">締切ゲージが足りなくなったとき用↓</p>
                     <div className="flex justify-center gap-2 mt-0.5">
                       {/* 精神統一ボタン */}
                       <button
                         onClick={handleRest}
-                        disabled={currentHaste < 10 || isTargetMet || isMonsterAttacking || turnResetMessage}
+                        disabled={remainingHaste < 10 || isMonsterAttacking || turnResetMessage}
                         className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border-2 transition-all ${
-                          currentHaste >= 10 && !isTargetMet && !isMonsterAttacking && !turnResetMessage
+                          remainingHaste >= 10 && !isMonsterAttacking && !turnResetMessage
                             ? 'bg-slate-800 hover:bg-slate-700 border-indigo-500/50 active:scale-95'
                             : 'bg-slate-900 border-slate-700 opacity-40 cursor-not-allowed'
                         }`}
                       >
                         <Coffee className="text-indigo-400" size={16} />
-                        <span className="text-[9px] font-bold text-white uppercase tracking-wider">精神統一</span>
+                        <span className="text-[9px] font-bold text-white uppercase tracking-wider">休憩</span>
                         <div className="flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-white text-slate-900">
                           <Zap className="w-3 h-3" />
                           <span className="text-[8px] font-black">10</span>
                         </div>
-                        <div className="flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-blue-500 text-white">
-                          <Hexagon className="w-3 h-3" />
-                          <span className="text-[8px] font-black">+30</span>
-                        </div>
                       </button>
-                      {/* ターン終了ボタン */}
+                      {/* 締切確定ボタン */}
                       <button
-                        onClick={() => handleEnemyAttack(stack, deck, hand)}
-                        disabled={isTargetMet || isMonsterAttacking || turnResetMessage}
+                        onClick={() => handleDeadline(gold)}
+                        disabled={isMonsterAttacking || turnResetMessage}
                         className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border-2 transition-all ${
-                          !isTargetMet && !isMonsterAttacking && !turnResetMessage
-                            ? 'bg-red-950 hover:bg-red-900 border-red-500/50 active:scale-95'
+                          !isMonsterAttacking && !turnResetMessage
+                            ? gold >= currentEnemy.baseHP
+                              ? 'bg-green-950 hover:bg-green-900 border-green-500/50 active:scale-95'
+                              : 'bg-red-950 hover:bg-red-900 border-red-500/50 active:scale-95'
                             : 'bg-slate-900 border-slate-700 opacity-40 cursor-not-allowed'
                         }`}
                       >
-                        <HeartCrack className="text-red-400" size={16} />
-                        <span className="text-[9px] font-bold text-white uppercase tracking-wider">ターン終了</span>
-                        <div className="flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-red-500 text-white">
-                          <HeartCrack className="w-3 h-3" />
-                          <span className="text-[8px] font-black">-1</span>
-                        </div>
+                        {gold >= currentEnemy.baseHP ? (
+                          <>
+                            <Trophy className="text-green-400" size={16} />
+                            <span className="text-[9px] font-bold text-white uppercase tracking-wider">締切確定</span>
+                            <div className="flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-green-500 text-white">
+                              <Trophy className="w-3 h-3" />
+                              <span className="text-[8px] font-black">クリア</span>
+                            </div>
+                          </>
+                        ) : (
+                          <>
+                            <HeartCrack className="text-red-400" size={16} />
+                            <span className="text-[9px] font-bold text-white uppercase tracking-wider">締切確定</span>
+                            <div className="flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-red-500 text-white">
+                              <HeartCrack className="w-3 h-3" />
+                              <span className="text-[8px] font-black">-1</span>
+                            </div>
+                          </>
+                        )}
                       </button>
                     </div>
                 </div>

@@ -32,9 +32,15 @@ export type BuffType =
   | 'stat_up'           // ステータスアップ
   | 'stat_down'         // ステータスダウン
   | 'base_damage_boost' // ベースダメージ倍化（スタック制）
-  | 'strength'          // 筋力（カード使用時10減、ADに加算）
+  | 'strength'          // 筋力（カード使用時10減、社員数に加算）
   | 'parry'             // パリィ（次カード使用で消滅、敵攻撃時に無敵+筋力+50）
-  | 'invincible';       // 無敵（敵攻撃を無効化、スタック数分有効）
+  | 'invincible'        // 無敵（敵攻撃を無効化、スタック数分有効）
+  | 'deathmarch'        // デスマーチ（スタック×10ヘイスト増加、ダメージで全解除）
+  | 'bug'               // バグ（炎上時に消費、1につき進捗-10%）
+  | 'kyushoku'          // 休職（社員数-20%/stack）
+  | 'yudan'             // 油断（アタックのヘイスト+5/stack）
+  | 'unity'             // 一致団結（+100%/stack、加算）
+  | 'focus';            // 集中（x1.2^stack、乗算）
 
 // プレイヤーのバフ/デバフ
 export interface PlayerBuff {
@@ -140,6 +146,7 @@ export interface PassiveEffect {
   value: number;
   value2?: number;  // 複合効果用
   rarity: Rarity;
+  maxStack: number;  // 最大所持数（0=無制限、1=重複不可、2以上=その数まで）
 }
 
 export interface CardProps {
@@ -153,4 +160,6 @@ export interface CardProps {
   effectsDisabled?: boolean;
   // 能力ダメージ計算用
   enemyDamageTaken?: number;      // 敵の減少HP（最大HP - 現在HP）
+  effectiveEmployees?: number;    // デバフ適用後の実効社員数
+  extraDelay?: number;            // 追加ヘイスト消費（油断デバフ等）
 }
