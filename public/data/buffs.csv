@@ -17,3 +17,4 @@ number,string,string,string,string,string,number,string,string
 0,FOCUS,focus,focus,フロー,1スタックにつきx1.4（乗算）,1,,https://img.icons8.com/fluency/144/meditation-guru.png
 0,GACHA,gacha,gacha,ガチャ,収益^1.5（累乗）,1,,https://img.icons8.com/fluency/144/slot-machine.png
 0,NEXTCARDFREE,nextCardFree,nextCardFree,デスマーチ,次のカードをディレイ0で使用,1,,https://img.icons8.com/fluency/144/fire-element.png
+0,DEADLINE_EXTEND,deadline_extend,deadline_extend,締切延長,残り締切が増加,2,,https://img.icons8.com/fluency/144/calendar-plus.png

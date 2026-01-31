@@ -13,7 +13,7 @@ import {
   ShieldAlert, Sparkles, Ghost, Hexagon,
   CheckCircle2, Info, Award, Undo2, Layers, PlusCircle,
   X, Search, Biohazard, Heart, HeartCrack, Coffee, Coins, ShoppingCart, Check,
-  ZapOff, Star, BookOpen, Settings, RefreshCw, Trash2, Trophy, Clock, Users
+  ZapOff, Star, BookOpen, Settings, RefreshCw, Trash2, Trophy, Clock, Users, Flame
 } from 'lucide-react';
 
 // フォールバック付き画像コンポーネント
@@ -99,6 +99,9 @@ const App: React.FC = () => {
   const [baseHandSize, setBaseHandSize] = useState<number>(3); // 基礎手札枚数
   const [isProcessingCard, setIsProcessingCard] = useState<boolean>(false); // カード処理中フラグ
 
+  // 炎上演出
+  const [isBurning, setIsBurning] = useState<boolean>(false);
+
   // Deck Overlay State
   const [isDeckOverlayOpen, setIsDeckOverlayOpen] = useState<boolean>(false);
 
@@ -144,7 +147,7 @@ const App: React.FC = () => {
   const [isPlayerTakingDamage, setIsPlayerTakingDamage] = useState<boolean>(false);
   const [turnResetMessage, setTurnResetMessage] = useState<boolean>(false);
   const [isVictoryEffect, setIsVictoryEffect] = useState<boolean>(false);
-  const [victoryQuitInfo, setVictoryQuitInfo] = useState<{ blackDegree: number; quitCount: number } | null>(null);
+  const [victoryQuitInfo, setVictoryQuitInfo] = useState<{ blackDegree: number; quitCount: number; blackReduced?: boolean } | null>(null);
 
   const [projectile, setProjectile] = useState<{ icon: string; id: string } | null>(null);
   const [currentEnemy, setCurrentEnemy] = useState<Enemy>({ name: '', icon: '', baseHP: 0, minFloor: 0, maxFloor: 0, dropsAbility: 'N' });
@@ -214,11 +217,12 @@ const App: React.FC = () => {
     return playerBuffs.some(b => b.type === 'nextCardFree');
   };
 
-  // ヘイスト（行動力）の最大値（デスマーチボーナス含む）
+  // ヘイスト（行動力）の最大値（デスマーチボーナス、締切延長バフ含む）
   const maxHaste = useMemo(() => {
     const base = heroStats.sp + passives.reduce((acc, p) => p.type === 'capacity_boost' ? acc + p.value : acc, 0);
     const deathMarchBonus = playerBuffs.filter(b => b.type === 'deathmarch').reduce((sum, b) => sum + b.value, 0) * 10;
-    return base + deathMarchBonus;
+    const deadlineExtend = playerBuffs.filter(b => b.type === 'deadline_extend').reduce((sum, b) => sum + b.value, 0);
+    return base + deathMarchBonus + deadlineExtend;
   }, [heroStats.sp, passives, playerBuffs]);
 
   // 残りヘイスト（表示・判定用）
@@ -315,8 +319,8 @@ const App: React.FC = () => {
 
     const valueToAdd = customValue ?? buffDef.defaultValue;
 
-    // base_damage_boostまたはstrengthの場合、既存のバフがあればスタックを加算
-    if (buffDef.type === 'base_damage_boost' || buffDef.type === 'strength') {
+    // base_damage_boost、strength、deadline_extendの場合、既存のバフがあればスタックを加算
+    if (buffDef.type === 'base_damage_boost' || buffDef.type === 'strength' || buffDef.type === 'deadline_extend') {
       setPlayerBuffs(prev => {
         const existingBuff = prev.find(b => b.type === buffDef.type);
         if (existingBuff) {
@@ -970,8 +974,11 @@ const App: React.FC = () => {
             employees: Math.max(1, prev.employees - employeesToQuit)
           }));
         }
-        // 退職情報を保存（VICTORY画面で表示用）
-        setVictoryQuitInfo(workStyle > 0 ? { blackDegree, quitCount: employeesToQuit } : null);
+        // ブラック度を半分にする
+        const newWorkStyle = Math.floor(workStyle / 2);
+        setWorkStyle(newWorkStyle);
+        // 退職情報を保存（VICTORY画面で表示用）- ブラック度減少情報も追加
+        setVictoryQuitInfo(workStyle > 0 ? { blackDegree, quitCount: employeesToQuit, blackReduced: true } : null);
 
         setTimeout(() => {
           setIsVictoryEffect(false);  // ダイアログ表示時にリセット
@@ -1173,35 +1180,37 @@ const App: React.FC = () => {
         // 進捗を加算（ゲージ表示用、目標超過も許可）
         const newProgress = progress + actualDamage;
         setProgress(newProgress);
-        // 稼いだ分だけゴールド（売上）も増える
-        let finalGold = gold + actualDamage;
-
-        // ブラック度効果: カード使用後に確率で全財産喪失
+        // ブラック度効果: カード使用後に確率で炎上（全財産喪失＋このカードのダメージ無効）
         // ブラック度100で30%の確率
+        let didBurn = false;
         if (workStyle > 0) {
           const blackDegree = workStyle;  // 0〜100
           const loseChance = blackDegree * 0.3 / 100;  // 0〜0.3 (0〜30%)
           if (Math.random() < loseChance) {
-            finalGold = 0;
-            // 炎上エフェクト表示用
-            const burnId = generateId();
-            setFloatingDamages(prev => [...prev, { id: burnId, value: -gold, isPoison: true }]);
-            setTimeout(() => setFloatingDamages(p => p.filter(d => d.id !== burnId)), 1500);
+            didBurn = true;
+            // 炎上演出を表示
+            setIsBurning(true);
+            setTimeout(() => setIsBurning(false), 2500);
           }
         }
 
+        // 稼いだ分だけゴールド（売上）も増える（炎上時は0）
+        const finalGold = didBurn ? 0 : gold + actualDamage;
         setGold(finalGold);
         setCurrentComboPower(newTotalPower);
         setStack(newStack);
 
-        const damageId = generateId();
-        setFloatingDamages(prev => [...prev, { id: damageId, value: actualDamage }]);
-        if (poisonDmg > 0) {
-          const pId = generateId();
-          setFloatingDamages(prev => [...prev, { id: pId, value: poisonDmg, isPoison: true }]);
-          setTimeout(() => setFloatingDamages(p => p.filter(d => d.id !== pId)), 1000);
+        // 炎上時はダメージ表示しない
+        if (!didBurn) {
+          const damageId = generateId();
+          setFloatingDamages(prev => [...prev, { id: damageId, value: actualDamage }]);
+          if (poisonDmg > 0) {
+            const pId = generateId();
+            setFloatingDamages(prev => [...prev, { id: pId, value: poisonDmg, isPoison: true }]);
+            setTimeout(() => setFloatingDamages(p => p.filter(d => d.id !== pId)), 1000);
+          }
+          setTimeout(() => setFloatingDamages(prev => prev.filter(d => d.id !== damageId)), 1000);
         }
-        setTimeout(() => setFloatingDamages(prev => prev.filter(d => d.id !== damageId)), 1000);
 
         // ワークスタイルイベント判定は現在無効化
         // if (skill.cardType === 'attack') {
@@ -1209,9 +1218,10 @@ const App: React.FC = () => {
         // }
 
         // カード効果をrepeatCount回実行（ためるバフ対応）
+        // 炎上時はダメージ系効果（lifesteal、magic_lifesteal）はスキップ、バフ系効果は発動
         if (skill.effect && !isEffectDisabled(skill)) {
           for (let i = 0; i < repeatCount; i++) {
-           if (skill.effect.type === 'lifesteal') {
+           if (skill.effect.type === 'lifesteal' && !didBurn) {
               // 1回あたりのダメージで回復（repeatCountは既にactualDamageの計算で考慮されているため1回分）
               const perHitDamage = Math.floor(actualDamage / repeatCount);
               setMana(prev => Math.min(maxMana, prev + perHitDamage));
@@ -1219,7 +1229,7 @@ const App: React.FC = () => {
               setFloatingDamages(prev => [...prev, { id: mhId, value: perHitDamage, isMana: true }]);
               setTimeout(() => setFloatingDamages(p => p.filter(d => d.id !== mhId)), 1000);
            }
-           if (skill.effect.type === 'magic_lifesteal') {
+           if (skill.effect.type === 'magic_lifesteal' && !didBurn) {
               // ダメージ分士気回復
               const perHitDmg = Math.floor(perHitDamage);
               if (perHitDmg > 0) {
@@ -1289,9 +1299,13 @@ const App: React.FC = () => {
              addBuff('PARRY', 1);
            }
            if (skill.effect.type === 'add_time') {
-             // 締切を増やす（usedHasteを減らすことで残り時間を増やす）
+             // 締切を増やす（バフを付与してmaxHasteを増加）
              const timeValue = skill.effect.params.value || 2;
-             setUsedHaste(prev => Math.max(0, prev - timeValue));
+             addBuff('DEADLINE_EXTEND', timeValue);
+           }
+           if (skill.effect.type === 'clear_buffs') {
+             // バフ・デバフを全て解除
+             setPlayerBuffs([]);
            }
            if (skill.effect.type === 'cost_gold_percent') {
              // ノルマの%分ゴールドを引く
@@ -1497,6 +1511,23 @@ const App: React.FC = () => {
         .victory-particle {
           font-size: 24px;
           animation: victoryParticle 1.5s ease-out forwards;
+        }
+
+        /* 炎上演出 */
+        @keyframes burnFlash {
+          0%, 100% { background-color: rgba(220, 38, 38, 0.3); }
+          50% { background-color: rgba(220, 38, 38, 0.6); }
+        }
+        @keyframes burnRise {
+          0% { transform: translateY(0) scale(1); opacity: 0.8; }
+          50% { transform: translateY(-100px) scale(1.2); opacity: 1; }
+          100% { transform: translateY(-200px) scale(0.8); opacity: 0; }
+        }
+        .animate-burn-flash > div:first-child {
+          animation: burnFlash 0.3s ease-in-out infinite;
+        }
+        .animate-burn-rise {
+          animation: burnRise 1.5s ease-out forwards;
         }
       `}</style>
 
@@ -2156,6 +2187,37 @@ const App: React.FC = () => {
                             </div>
                           </div>
                         )}
+                        {/* 炎上演出 */}
+                        {isBurning && (
+                          <div className="absolute inset-0 z-[100] flex items-center justify-center pointer-events-none animate-burn-flash">
+                            {/* 赤い点滅オーバーレイ */}
+                            <div className="absolute inset-0 bg-red-600/40 animate-pulse" />
+                            {/* 炎パーティクル */}
+                            <div className="absolute inset-0 overflow-hidden">
+                              {[...Array(8)].map((_, i) => (
+                                <Flame
+                                  key={i}
+                                  className="absolute text-orange-500 animate-burn-rise"
+                                  size={48 + Math.random() * 32}
+                                  style={{
+                                    left: `${10 + i * 12}%`,
+                                    bottom: '-20%',
+                                    animationDelay: `${i * 0.1}s`,
+                                    opacity: 0.8
+                                  }}
+                                />
+                              ))}
+                            </div>
+                            {/* メッセージ */}
+                            <div className="relative bg-slate-950/90 backdrop-blur-sm border-2 border-orange-500 px-8 py-6 rounded-xl flex flex-col items-center shadow-2xl animate-in zoom-in duration-300">
+                                <Flame className="text-orange-500 mb-3 animate-pulse" size={56} />
+                                <h3 className="text-orange-400 font-fantasy font-bold text-2xl tracking-widest uppercase mb-2">炎上</h3>
+                                <p className="text-orange-200 text-sm font-bold text-center leading-relaxed">
+                                  プロジェクトは炎上して<br/>全財産を失った！！
+                                </p>
+                            </div>
+                          </div>
+                        )}
                         {/* 敵名（中央上部） */}
                         <div className="absolute top-2 left-1/2 transform -translate-x-1/2 z-20">
                             <div className="px-3 py-0.5 bg-slate-900/90 border border-slate-700 rounded text-[0.625rem] font-black uppercase tracking-[0.1em] text-slate-300 shadow-lg">{currentEnemy.name}</div>
@@ -2290,12 +2352,19 @@ const App: React.FC = () => {
                             </div>
                         </div>
 
-                        {/* 退職情報 */}
-                        {victoryQuitInfo && victoryQuitInfo.quitCount > 0 && (
-                          <div className="mb-4 px-4 py-2 bg-red-900/50 border border-red-600/50 rounded-lg text-center">
-                            <p className="text-sm text-red-300">
-                              😈 ブラック度により、社員の{victoryQuitInfo.blackDegree}%（{victoryQuitInfo.quitCount}人）が退職
-                            </p>
+                        {/* 退職情報・ブラック度減少 */}
+                        {victoryQuitInfo && (
+                          <div className="mb-4 px-4 py-2 bg-red-900/50 border border-red-600/50 rounded-lg text-center space-y-1">
+                            {victoryQuitInfo.quitCount > 0 && (
+                              <p className="text-sm text-red-300">
+                                😈 ブラック度により、社員の{victoryQuitInfo.blackDegree}%（{victoryQuitInfo.quitCount}人）が退職
+                              </p>
+                            )}
+                            {victoryQuitInfo.blackReduced && (
+                              <p className="text-sm text-blue-300">
+                                😇 ブラック度が50%下がった（{victoryQuitInfo.blackDegree}% → {Math.floor(victoryQuitInfo.blackDegree / 2)}%）
+                              </p>
+                            )}
                           </div>
                         )}
 
@@ -2355,12 +2424,19 @@ const App: React.FC = () => {
                             </div>
                         </div>
 
-                        {/* 退職情報 */}
-                        {victoryQuitInfo && victoryQuitInfo.quitCount > 0 && (
-                          <div className="mb-4 px-4 py-2 bg-red-900/50 border border-red-600/50 rounded-lg text-center">
-                            <p className="text-sm text-red-300">
-                              😈 ブラック度により、社員の{victoryQuitInfo.blackDegree}%（{victoryQuitInfo.quitCount}人）が退職
-                            </p>
+                        {/* 退職情報・ブラック度減少 */}
+                        {victoryQuitInfo && (
+                          <div className="mb-4 px-4 py-2 bg-red-900/50 border border-red-600/50 rounded-lg text-center space-y-1">
+                            {victoryQuitInfo.quitCount > 0 && (
+                              <p className="text-sm text-red-300">
+                                😈 ブラック度により、社員の{victoryQuitInfo.blackDegree}%（{victoryQuitInfo.quitCount}人）が退職
+                              </p>
+                            )}
+                            {victoryQuitInfo.blackReduced && (
+                              <p className="text-sm text-blue-300">
+                                😇 ブラック度が50%下がった（{victoryQuitInfo.blackDegree}% → {Math.floor(victoryQuitInfo.blackDegree / 2)}%）
+                              </p>
+                            )}
                           </div>
                         )}
 
@@ -2420,12 +2496,19 @@ const App: React.FC = () => {
                             </div>
                         </div>
 
-                        {/* 退職情報 */}
-                        {victoryQuitInfo && victoryQuitInfo.quitCount > 0 && (
-                          <div className="mb-4 px-4 py-2 bg-red-900/50 border border-red-600/50 rounded-lg text-center">
-                            <p className="text-sm text-red-300">
-                              😈 ブラック度により、社員の{victoryQuitInfo.blackDegree}%（{victoryQuitInfo.quitCount}人）が退職
-                            </p>
+                        {/* 退職情報・ブラック度減少 */}
+                        {victoryQuitInfo && (
+                          <div className="mb-4 px-4 py-2 bg-red-900/50 border border-red-600/50 rounded-lg text-center space-y-1">
+                            {victoryQuitInfo.quitCount > 0 && (
+                              <p className="text-sm text-red-300">
+                                😈 ブラック度により、社員の{victoryQuitInfo.blackDegree}%（{victoryQuitInfo.quitCount}人）が退職
+                              </p>
+                            )}
+                            {victoryQuitInfo.blackReduced && (
+                              <p className="text-sm text-blue-300">
+                                😇 ブラック度が50%下がった（{victoryQuitInfo.blackDegree}% → {Math.floor(victoryQuitInfo.blackDegree / 2)}%）
+                              </p>
+                            )}
                           </div>
                         )}
 
