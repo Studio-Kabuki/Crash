@@ -3,7 +3,8 @@ import { Skill, Enemy, BattleEvent, SkillEffect, EffectType, EffectTrigger, Effe
 
 // CSVから読み込む生データの型
 interface RawSkill {
-  disabled: number;      // 1で無効化
+  disabled: number;         // 1で無効化
+  excludeFromPool: number;  // 1で抽選対象外
   name: string;
   rarity: string;
   effectDescription: string;
@@ -23,6 +24,13 @@ interface RawSkill {
   widthClass: string;
   borderRadiusClass: string;
   icon: string;
+}
+
+interface RawStarterDeck {
+  deckId: string;
+  deckName: string;
+  skillName: string;
+  count: number;
 }
 
 interface RawEnemy {
@@ -197,10 +205,18 @@ export function createSkillWithId(skill: Omit<Skill, 'id'>): Skill {
   return { ...skill, id: generateId() };
 }
 
+// スターターデッキ定義
+export interface StarterDeck {
+  id: string;
+  name: string;
+  cards: { skill: Omit<Skill, 'id'>; count: number }[];
+}
+
 // データローダー
 export interface GameData {
-  initialSkills: Omit<Skill, 'id'>[];
-  skillPool: Omit<Skill, 'id'>[];
+  starterDecks: StarterDeck[];
+  allSkills: Omit<Skill, 'id'>[];  // 全スキル（図鑑用）
+  skillPool: Omit<Skill, 'id'>[];  // 抽選対象スキル
   enemies: Enemy[];
   heroData: HeroInitialData;
   passivePool: PassiveEffect[];
@@ -209,13 +225,14 @@ export interface GameData {
 }
 
 export async function loadGameData(): Promise<GameData> {
-  const [rawSkills, rawEnemies, rawHeroes, rawPassives, rawTraits, rawBuffs] = await Promise.all([
+  const [rawSkills, rawEnemies, rawHeroes, rawPassives, rawTraits, rawBuffs, rawStarterDecks] = await Promise.all([
     loadCSV<RawSkill>('/data/skills.csv'),
     loadCSV<RawEnemy>('/data/enemies.csv'),
     loadCSV<RawHero>('/data/hero.csv'),
     loadCSV<RawPassive>('/data/passives.csv'),
     loadCSV<RawTrait>('/data/traits.csv'),
-    loadCSV<RawBuff>('/data/buffs.csv')
+    loadCSV<RawBuff>('/data/buffs.csv'),
+    loadCSV<RawStarterDeck>('/data/starter_decks.csv')
   ]);
 
   // disabled=1のデータを除外
@@ -267,16 +284,38 @@ export async function loadGameData(): Promise<GameData> {
     };
   });
 
-  // 初期スキル: スラッシュ、ハイスラッシュ、ためる
-  const initialSkillNames = ['スラッシュ', 'ハイスラッシュ', 'ためる'];
-  const initialSkills = allSkills.filter(s => initialSkillNames.includes(s.name));
+  // スキルプール: excludeFromPool=1のカードを除外
+  const skillPool = enabledSkills
+    .filter(raw => !raw.excludeFromPool || raw.excludeFromPool === 0)
+    .map(convertToSkill);
 
-  // スキルプール: スラッシュ以外（ハイスラッシュ・ためるはドロップ/ショップ対象）
-  const excludeFromPool = ['スラッシュ'];
-  const skillPool = allSkills.filter(s => !excludeFromPool.includes(s.name));
+  // スターターデッキを構築
+  // スキル名からスキルを検索するためのマップ
+  const skillByName = new Map<string, Omit<Skill, 'id'>>();
+  allSkills.forEach(skill => skillByName.set(skill.name, skill));
+
+  // デッキIDごとにグループ化
+  const deckGroups = new Map<string, { name: string; cards: { skill: Omit<Skill, 'id'>; count: number }[] }>();
+  rawStarterDecks.forEach(raw => {
+    const skill = skillByName.get(raw.skillName);
+    if (!skill) {
+      console.warn(`Starter deck references unknown skill: ${raw.skillName}`);
+      return;
+    }
+    if (!deckGroups.has(raw.deckId)) {
+      deckGroups.set(raw.deckId, { name: raw.deckName, cards: [] });
+    }
+    deckGroups.get(raw.deckId)!.cards.push({ skill, count: raw.count });
+  });
+
+  const starterDecks: StarterDeck[] = [];
+  deckGroups.forEach((value, key) => {
+    starterDecks.push({ id: key, name: value.name, cards: value.cards });
+  });
 
   return {
-    initialSkills,
+    starterDecks,
+    allSkills,
     skillPool,
     enemies,
     heroData,

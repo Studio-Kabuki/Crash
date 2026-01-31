@@ -436,17 +436,16 @@ const App: React.FC = () => {
   const startGame = () => {
     if (!gameData) return;
 
-    // 初期デッキ作成: スラッシュ×2, ためる×1, ハイスラッシュ×1
-    const slashSkill = gameData.initialSkills.find(s => s.name === 'スラッシュ');
-    const highSlashSkill = gameData.initialSkills.find(s => s.name === 'ハイスラッシュ');
-    const chargeSkill = gameData.initialSkills.find(s => s.name === 'ためる');
-
+    // スターターデッキから初期デッキを作成（デフォルトは最初のデッキ）
+    const starterDeck = gameData.starterDecks[0];
     const startDeck: Skill[] = [];
-    if (slashSkill) {
-      for (let i = 0; i < 2; i++) startDeck.push(createSkillWithId(slashSkill));
+    if (starterDeck) {
+      starterDeck.cards.forEach(({ skill, count }) => {
+        for (let i = 0; i < count; i++) {
+          startDeck.push(createSkillWithId(skill));
+        }
+      });
     }
-    if (chargeSkill) startDeck.push(createSkillWithId(chargeSkill));
-    if (highSlashSkill) startDeck.push(createSkillWithId(highSlashSkill));
 
     setPermanentDeck(startDeck);
     const battleDeck = shuffle(startDeck);
@@ -1701,7 +1700,7 @@ const App: React.FC = () => {
 
       {/* CARD DEX OVERLAY */}
       {isCardDexOpen && (() => {
-        const allCards = [...gameData.initialSkills, ...gameData.skillPool];
+        const allCards = gameData.allSkills;
         return (
           <div className="fixed inset-0 z-[100] bg-slate-900/50 backdrop-blur p-4 flex flex-col animate-in fade-in duration-300">
             <div className="w-full max-w-sm md:max-w-md lg:max-w-lg mx-auto flex flex-col h-full">
@@ -1714,33 +1713,16 @@ const App: React.FC = () => {
                 <button onClick={() => setIsCardDexOpen(false)} className="p-2 hover:bg-slate-800 rounded-full text-slate-400 hover:text-white"><X size={28} /></button>
               </div>
               <div className="flex-1 overflow-y-auto no-scrollbar pb-10">
-                {/* 初期カード */}
+                {/* 全カード */}
                 <div className="mb-6">
                   <div className="flex items-center gap-2 mb-3 pb-2 border-b border-slate-800">
                     <Swords size={16} className="text-slate-400" />
-                    <h3 className="text-sm font-bold text-slate-400 uppercase tracking-widest">初期カード</h3>
-                    <span className="text-[10px] text-slate-600 font-bold">{gameData.initialSkills.length}枚</span>
+                    <h3 className="text-sm font-bold text-slate-400 uppercase tracking-widest">全カード</h3>
+                    <span className="text-[10px] text-slate-600 font-bold">{allCards.length}枚</span>
                   </div>
                   <div className="deck-grid">
-                    {gameData.initialSkills.map((skill, idx) => (
-                      <div key={`initial-${skill.name}-${idx}`} className="relative transition-all duration-300 h-[145px] md:h-[180px] lg:h-[210px]">
-                        <div className="transform scale-[0.65] md:scale-[0.8] lg:scale-[0.95] origin-top">
-                          <Card skill={skill} onClick={() => {}} disabled={false} mana={999} currentHaste={999} heroStats={heroStats} />
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-                {/* 報酬カード */}
-                <div className="mt-6">
-                  <div className="flex items-center gap-2 mb-3 pb-2 border-b border-indigo-700/50">
-                    <Sparkles size={16} className="text-indigo-400" />
-                    <h3 className="text-sm font-bold text-indigo-400 uppercase tracking-widest">報酬カード</h3>
-                    <span className="text-[10px] text-indigo-600 font-bold">{gameData.skillPool.length}枚</span>
-                  </div>
-                  <div className="deck-grid">
-                    {gameData.skillPool.map((skill, idx) => (
-                      <div key={`pool-${skill.name}-${idx}`} className="relative transition-all duration-300 h-[145px] md:h-[180px] lg:h-[210px]">
+                    {allCards.map((skill, idx) => (
+                      <div key={`card-${skill.name}-${idx}`} className="relative transition-all duration-300 h-[145px] md:h-[180px] lg:h-[210px]">
                         <div className="transform scale-[0.65] md:scale-[0.8] lg:scale-[0.95] origin-top">
                           <Card skill={skill} onClick={() => {}} disabled={false} mana={999} currentHaste={999} heroStats={heroStats} />
                         </div>
@@ -1852,7 +1834,7 @@ const App: React.FC = () => {
               <div>
                 <h3 className="text-sm font-bold text-slate-400 uppercase tracking-widest mb-3 pb-2 border-b border-slate-800">カードをデッキに追加</h3>
                 <div className="grid grid-cols-3 gap-2 max-h-[200px] overflow-y-auto no-scrollbar">
-                  {gameData && [...gameData.initialSkills, ...gameData.skillPool].map((skill, idx) => (
+                  {gameData && gameData.allSkills.map((skill, idx) => (
                     <button key={`add-${skill.name}-${idx}`} onClick={() => debugAddCard(skill)} className="p-2 bg-slate-800 border border-slate-700 rounded-lg hover:border-indigo-500 transition-all text-left">
                       <div className="flex items-center gap-2">
                         <SafeImage src={skill.icon} alt={skill.name} className="w-6 h-6 object-contain" />
