@@ -114,21 +114,41 @@ export interface BuffDefinition {
 // ID生成
 const generateId = () => Math.random().toString(36).substr(2, 9);
 
+// effectParams パーサー: "key=value;key=value" 形式をパース
+// 例: "buffId=CHARGE;value=2" → { buffId: "CHARGE", value: 2 }
+function parseEffectParams(str: string): EffectParams {
+  if (!str || str.length === 0) return {};
+
+  const params: EffectParams = {};
+  const pairs = str.split(';');
+
+  for (const pair of pairs) {
+    const [key, value] = pair.split('=');
+    if (!key || value === undefined) continue;
+
+    const trimmedKey = key.trim();
+    const trimmedValue = value.trim();
+
+    // 数値判定
+    const numValue = parseFloat(trimmedValue);
+    if (!isNaN(numValue) && trimmedValue === String(numValue)) {
+      (params as Record<string, unknown>)[trimmedKey] = numValue;
+    } else {
+      (params as Record<string, unknown>)[trimmedKey] = trimmedValue;
+    }
+  }
+
+  return params;
+}
+
 // RawSkill → Skill 変換
 function convertToSkill(raw: RawSkill): Omit<Skill, 'id'> {
   let effect: SkillEffect | undefined;
 
   // effectType があるか、effectDescription があれば effect オブジェクトを作成
   if ((raw.effectType && raw.effectType.length > 0) || (raw.effectDescription && raw.effectDescription.length > 0)) {
-    // effectParamsをJSONパース（空文字列やundefinedの場合は空オブジェクト）
-    let params: EffectParams = {};
-    if (raw.effectParams && raw.effectParams.length > 0) {
-      try {
-        params = JSON.parse(raw.effectParams);
-      } catch (e) {
-        console.warn(`Failed to parse effectParams for ${raw.name}:`, raw.effectParams);
-      }
-    }
+    // effectParamsをパース（key=value;key=value 形式）
+    const params = parseEffectParams(raw.effectParams);
 
     effect = {
       type: (raw.effectType || 'none') as EffectType,

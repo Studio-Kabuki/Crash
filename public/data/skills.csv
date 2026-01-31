@@ -4,29 +4,29 @@ number,number,string,string,string,string,string,number,number,number,number,num
 0,0,ハイスラッシュ,R,,AD反映率が高い,attack,20,300,0,10,10,,,,bg-slate-600,border-indigo-400,h-10,w-56,rounded-sm transform -skew-x-12,https://img.icons8.com/fluency/144/sword
 0,0,マジックミサイル,R,,,attack,10,0,400,30,0,,,,bg-indigo-600,border-indigo-300,h-9,w-48,rounded-full,https://img.icons8.com/fluency/144/wizard
 0,0,クラッシュ,R,,そんなに亀が怖いか？,attack,110,0,100,50,10,,,,bg-orange-600,border-orange-400,h-10,w-52,rounded-full,https://img.icons8.com/fluency/144/fire-element.png
-0,0,過集中,R,マナを30回復する,何も聞こえない。,support,0,0,0,0,0,mana_recovery,on_use,{"value":30},bg-teal-600,border-teal-400,h-8,w-48,rounded-full,https://img.icons8.com/fluency/144/brain
-0,0,ファイナルスラッシュ,SSR,山札・手札のスラッシュを全て捨てて枚数×AD100%ダメージ,全てを賭けた一撃,attack,0,0,0,20,10,discard_slash_damage,on_use,"{""value"":100,""targetName"":""スラッシュ""}",bg-purple-700,border-purple-400,h-12,w-56,rounded-none transform skew-x-12,https://img.icons8.com/fluency/144/battle
+0,0,過集中,R,マナを30回復する,何も聞こえない。,support,0,0,0,0,0,mana_recovery,on_use,value=30,bg-teal-600,border-teal-400,h-8,w-48,rounded-full,https://img.icons8.com/fluency/144/brain
+0,0,ファイナルスラッシュ,SSR,山札・手札のスラッシュを全て捨てて枚数×AD100%ダメージ,全てを賭けた一撃,attack,0,0,0,20,10,discard_slash_damage,on_use,value=100;targetName=スラッシュ,bg-purple-700,border-purple-400,h-12,w-56,rounded-none transform skew-x-12,https://img.icons8.com/fluency/144/battle
 0,0,かぶりつき,R,与えたダメージ分マナを回復,,attack,20,100,0,0,10,lifesteal,on_damage,,bg-red-800,border-red-400,h-8,w-48,rounded-full,https://img.icons8.com/fluency/144/vampire.png
-0,0,征服者,SSR,使用するたび倍率+30%(累積),成長する野望,attack,50,50,0,10,10,permanent_power_up,on_use,{"value":30},bg-red-800,border-yellow-400,h-10,w-52,rounded-md,https://img.icons8.com/fluency/144/crown.png
-0,0,ためる,R,次のアタックカードを2回発動,,support,0,0,0,30,0,add_buff,on_use,{"buffId":"CHARGE"},bg-orange-600,border-orange-400,h-8,w-48,rounded-full,https://img.icons8.com/fluency/144/lightning-bolt.png
+0,0,征服者,SSR,使用するたび倍率+30%(累積),成長する野望,attack,50,50,0,10,10,permanent_power_up,on_use,value=30,bg-red-800,border-yellow-400,h-10,w-52,rounded-md,https://img.icons8.com/fluency/144/crown.png
+0,0,ためる,R,次のアタックカードを2回発動,,support,0,0,0,30,0,add_buff,on_use,buffId=CHARGE,bg-orange-600,border-orange-400,h-8,w-48,rounded-full,https://img.icons8.com/fluency/144/lightning-bolt.png
 0,0,突飛でい,C,,,attack,70,0,0,0,10,,,,bg-slate-500,border-white,h-8,w-48,rounded-full,https://img.icons8.com/fluency/144/running
 0,0,文武両道,R,,物理と魔法の両方で攻撃する,attack,20,200,100,20,10,,,,bg-gradient-to-br,border-purple-400,h-10,w-52,rounded-lg,https://img.icons8.com/fluency/144/fantasy.png
-0,0,集中,R,次のベースダメージを2倍にする,,support,0,0,0,20,0,add_buff,on_use,"{""buffId"":""BASE_DOUBLE"",""value"":1}",bg-cyan-600,border-cyan-400,h-8,w-48,rounded-full,https://img.icons8.com/fluency/144/target
-0,0,ウルスラッシュ,R,前が物理攻撃ならヘイスト消費-10し1枚ドロー,,attack,10,100,0,0,10,physical_chain_haste_draw,on_use,"{""value"":10,""drawValue"":1}",bg-slate-600,border-emerald-400,h-9,w-56,rounded-sm transform -skew-x-12,https://img.icons8.com/fluency/144/sword
+0,0,集中,R,次のベースダメージを2倍にする,,support,0,0,0,20,0,add_buff,on_use,buffId=BASE_DOUBLE;value=1,bg-cyan-600,border-cyan-400,h-8,w-48,rounded-full,https://img.icons8.com/fluency/144/target
+0,0,ウルスラッシュ,R,前が物理攻撃ならヘイスト消費-10し1枚ドロー,,attack,10,100,0,0,10,physical_chain_haste_draw,on_use,value=10;drawValue=1,bg-slate-600,border-emerald-400,h-9,w-56,rounded-sm transform -skew-x-12,https://img.icons8.com/fluency/144/sword
 0,0,フルスイング,SR,,AD・APが高いほどダメージが減る,attack,300,-300,-300,0,20,none,,,bg-slate-800,border-orange-400,h-10,w-52,rounded-lg,https://img.icons8.com/fluency/144/hammer
 0,0,プレーンスラッシュ,C,,"あまりにも素早い斬撃。\n俺じゃなきゃ見逃しちゃうね。",attack,40,0,0,0,0,,,,bg-slate-500,border-slate-400,h-8,w-56,rounded-sm transform -skew-x-12,https://img.icons8.com/fluency/144/sword.png
-0,0,祖国のために,SR,敵の減少HP×100%のダメージ,,attack,0,0,0,0,10,enemy_damage_taken,on_use,{"value":100},bg-indigo-700,border-indigo-400,h-10,w-52,rounded-md,https://img.icons8.com/fluency/144/shield.png
-0,0,ドロースラッシュ,R,カードを2枚引く,,attack,10,50,0,10,0,draw,on_use,{"value":2},bg-slate-600,border-cyan-400,h-9,w-56,rounded-sm transform -skew-x-12,https://img.icons8.com/fluency/144/sword.png
-0,0,イカサマ,R,カードを3枚引く,バレなきゃ「イカサマ」じゃあねえんだぜ・・・,support,0,0,0,0,10,draw,on_use,{"value":3},bg-purple-600,border-purple-400,h-8,w-48,rounded-full,https://img.icons8.com/fluency/144/joker
-0,0,タイムボム,R,カードを2枚引く,,attack,0,0,200,20,0,draw,on_use,{"value":2},bg-cyan-700,border-cyan-300,h-9,w-52,rounded-full,https://img.icons8.com/fluency/144/time-machine.png
-0,0,ママダンテ,SSR,マナを全て消費して消費マナ×100%の魔法ダメージ,,attack,0,0,0,0,10,mana_consume_damage,on_use,{"value":100},bg-red-700,border-yellow-400,h-12,w-56,rounded-full,https://img.icons8.com/fluency/144/explosion.png
-0,0,死者の集い,SR,捨て札の魔法カード×10マナ回復し1枚ドロー,,support,0,0,0,0,0,discard_magic_mana,on_use,{"value":10},bg-purple-800,border-purple-400,h-9,w-52,rounded-full,https://img.icons8.com/fluency/144/skull
-0,0,グミ撃ち,C,戦闘中、このカードのコピーをデッキに追加する,やったか！？,attack,10,0,100,10,0,add_copy_to_deck,on_use,{},bg-pink-500,border-pink-300,h-8,w-48,rounded-full,https://img.icons8.com/fluency/144/candy
-0,0,所有権の放棄,R,"手札を全て捨て、\n捨てた数+1枚ドロー",そんなくだらないプライドは・・・捨てる,support,0,0,0,20,0,discard_redraw,on_use,{},bg-blue-600,border-blue-400,h-8,w-48,rounded-full,https://img.icons8.com/fluency/144/cards.png
+0,0,祖国のために,SR,敵の減少HP×100%のダメージ,,attack,0,0,0,0,10,enemy_damage_taken,on_use,value=100,bg-indigo-700,border-indigo-400,h-10,w-52,rounded-md,https://img.icons8.com/fluency/144/shield.png
+0,0,ドロースラッシュ,R,カードを2枚引く,,attack,10,50,0,10,0,draw,on_use,value=2,bg-slate-600,border-cyan-400,h-9,w-56,rounded-sm transform -skew-x-12,https://img.icons8.com/fluency/144/sword.png
+0,0,イカサマ,R,カードを3枚引く,バレなきゃ「イカサマ」じゃあねえんだぜ・・・,support,0,0,0,0,10,draw,on_use,value=3,bg-purple-600,border-purple-400,h-8,w-48,rounded-full,https://img.icons8.com/fluency/144/joker
+0,0,タイムボム,R,カードを2枚引く,,attack,0,0,200,20,0,draw,on_use,value=2,bg-cyan-700,border-cyan-300,h-9,w-52,rounded-full,https://img.icons8.com/fluency/144/time-machine.png
+0,0,ママダンテ,SSR,マナを全て消費して消費マナ×100%の魔法ダメージ,,attack,0,0,0,0,10,mana_consume_damage,on_use,value=100,bg-red-700,border-yellow-400,h-12,w-56,rounded-full,https://img.icons8.com/fluency/144/explosion.png
+0,0,死者の集い,SR,捨て札の魔法カード×10マナ回復し1枚ドロー,,support,0,0,0,0,0,discard_magic_mana,on_use,value=10,bg-purple-800,border-purple-400,h-9,w-52,rounded-full,https://img.icons8.com/fluency/144/skull
+0,0,グミ撃ち,C,戦闘中、このカードのコピーをデッキに追加する,やったか！？,attack,10,0,100,10,0,add_copy_to_deck,on_use,,bg-pink-500,border-pink-300,h-8,w-48,rounded-full,https://img.icons8.com/fluency/144/candy
+0,0,所有権の放棄,R,"手札を全て捨て、\n捨てた数+1枚ドロー",そんなくだらないプライドは・・・捨てる,support,0,0,0,20,0,discard_redraw,on_use,,bg-blue-600,border-blue-400,h-8,w-48,rounded-full,https://img.icons8.com/fluency/144/cards.png
 0,0,マナドレイン,R,魔法ダメージ分マナを回復,,attack,0,0,100,0,10,magic_lifesteal,on_damage,,bg-indigo-700,border-indigo-300,h-9,w-48,rounded-full,https://img.icons8.com/fluency/144/wizard
-0,0,魔導の極み,SR,使用した魔法カード枚数×50%APダメージ,魔法を極めし者の一撃,attack,0,0,0,30,10,magic_count_bonus,on_use,{"value":50},bg-purple-700,border-pink-400,h-10,w-52,rounded-full,https://img.icons8.com/fluency/144/crystal-ball.png
-0,0,チェインストライク,SR,前が物理攻撃ならヘイスト消費-30,繋げ！,attack,30,200,200,0,30,physical_chain_haste,on_use,{"value":30},bg-gradient-to-r from-slate-700 to-indigo-700,border-yellow-400,h-10,w-52,rounded-lg,https://img.icons8.com/fluency/144/battle
-0,0,剣の舞,R,0コストのスラッシュを3枚デッキに追加,舞うように斬る,support,0,0,0,20,0,add_slash_to_deck,on_use,{"value":3},bg-slate-600,border-orange-400,h-9,w-52,rounded-full,https://img.icons8.com/fluency/144/two-swords.png
-0,0,パワースラッシュ,R,筋力+20を付与,力こそ正義,attack,30,100,0,0,10,add_strength,on_use,{"value":20},bg-orange-700,border-orange-400,h-9,w-56,rounded-sm transform -skew-x-12,https://img.icons8.com/fluency/144/sword.png
-0,0,怒りの一撃,SR,前が物理なら筋力2倍,怒りが力に変わる,attack,20,150,0,0,10,double_strength,on_use,{},bg-red-700,border-red-400,h-9,w-56,rounded-sm transform -skew-x-12,https://img.icons8.com/fluency/144/sword.png
-0,0,パリィ,R,パリィを付与。敵攻撃を受けると筋力+50,構えろ,support,0,0,0,0,5,add_parry,on_use,{},bg-slate-600,border-yellow-400,h-8,w-48,rounded-full,https://img.icons8.com/fluency/144/shield.png
+0,0,魔導の極み,SR,使用した魔法カード枚数×50%APダメージ,魔法を極めし者の一撃,attack,0,0,0,30,10,magic_count_bonus,on_use,value=50,bg-purple-700,border-pink-400,h-10,w-52,rounded-full,https://img.icons8.com/fluency/144/crystal-ball.png
+0,0,チェインストライク,SR,前が物理攻撃ならヘイスト消費-30,繋げ！,attack,30,200,200,0,30,physical_chain_haste,on_use,value=30,bg-gradient-to-r from-slate-700 to-indigo-700,border-yellow-400,h-10,w-52,rounded-lg,https://img.icons8.com/fluency/144/battle
+0,0,剣の舞,R,0コストのスラッシュを3枚デッキに追加,舞うように斬る,support,0,0,0,20,0,add_slash_to_deck,on_use,value=3,bg-slate-600,border-orange-400,h-9,w-52,rounded-full,https://img.icons8.com/fluency/144/two-swords.png
+0,0,パワースラッシュ,R,筋力+20を付与,力こそ正義,attack,30,100,0,0,10,add_strength,on_use,value=20,bg-orange-700,border-orange-400,h-9,w-56,rounded-sm transform -skew-x-12,https://img.icons8.com/fluency/144/sword.png
+0,0,怒りの一撃,SR,前が物理なら筋力2倍,怒りが力に変わる,attack,20,150,0,0,10,double_strength,on_use,,bg-red-700,border-red-400,h-9,w-56,rounded-sm transform -skew-x-12,https://img.icons8.com/fluency/144/sword.png
+0,0,パリィ,R,パリィを付与。敵攻撃を受けると筋力+50,構えろ,support,0,0,0,0,5,add_parry,on_use,,bg-slate-600,border-yellow-400,h-8,w-48,rounded-full,https://img.icons8.com/fluency/144/shield.png
