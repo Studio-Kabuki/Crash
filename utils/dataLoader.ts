@@ -150,15 +150,15 @@ function convertToSkill(raw: RawSkill): Omit<Skill, 'id'> {
   };
 }
 
-// RawEnemy → Enemy 変換
-function convertToEnemy(raw: RawEnemy): Enemy {
+// RawEnemy → Enemy 変換（traitsを引数で受け取る）
+function convertToEnemy(raw: RawEnemy, traits: Record<string, BattleEvent>): Enemy {
   return {
     name: raw.name,
     icon: raw.icon,
     baseHP: raw.baseHP,
     minFloor: raw.minFloor,
     maxFloor: raw.maxFloor,
-    trait: TRAITS[raw.traitId] || TRAITS.NEUTRAL,
+    trait: traits[raw.traitId] || traits['NEUTRAL'],
     dropsAbility: (raw.dropsAbility === 'Y' || raw.dropsAbility === 'C') ? raw.dropsAbility : 'N'
   };
 }
@@ -224,7 +224,6 @@ export async function loadGameData(): Promise<GameData> {
   const enabledPassives = rawPassives.filter(raw => !raw.disabled || raw.disabled === 0);
 
   const allSkills = enabledSkills.map(convertToSkill);
-  const enemies = enabledEnemies.map(convertToEnemy);
   const heroData = rawHeroes.length > 0 ? convertToHeroData(rawHeroes[0]) : {
     stats: { ad: 30, ap: 10, sp: 30, mp: 50 },
     mana: 50,
@@ -249,6 +248,9 @@ export async function loadGameData(): Promise<GameData> {
       type: raw.type as 'positive' | 'negative' | 'neutral'
     };
   });
+
+  // Enemiesを変換（traitsが必要なのでここで）
+  const enemies = enabledEnemies.map(raw => convertToEnemy(raw, traits));
 
   // Buffsを変換（keyでRecord化）
   const enabledBuffs = rawBuffs.filter(raw => !raw.disabled || raw.disabled === 0);
