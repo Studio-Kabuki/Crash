@@ -1,5 +1,5 @@
 import { loadCSV } from './csvParser';
-import { Skill, Enemy, BattleEvent, SkillEffect, EffectType, EffectTrigger, EffectParams, CardType, Rarity, PassiveEffect, HeroStats } from '../types';
+import { Skill, Enemy, BattleEvent, SkillEffect, EffectType, EffectTrigger, EffectParams, CardType, Rarity, PassiveEffect, HeroStats, CardAttribute } from '../types';
 
 // CSVから読み込む生データの型
 interface RawSkill {
@@ -24,6 +24,7 @@ interface RawSkill {
   widthClass: string;
   borderRadiusClass: string;
   icon: string;
+  attribute: string;
 }
 
 interface RawStarterDeck {
@@ -157,6 +158,11 @@ function convertToSkill(raw: RawSkill): Omit<Skill, 'id'> {
     };
   }
 
+  // 属性をパース（空の場合は 'none'）
+  const attribute: CardAttribute = (raw.attribute === 'program' || raw.attribute === 'design' || raw.attribute === 'sound')
+    ? raw.attribute
+    : 'none';
+
   return {
     name: raw.name,
     icon: raw.icon,
@@ -173,6 +179,7 @@ function convertToSkill(raw: RawSkill): Omit<Skill, 'id'> {
     borderRadiusClass: raw.borderRadiusClass,
     rarity: raw.rarity as Rarity,
     effect,
+    attribute,
     ...(raw.flavorText ? { flavorText: raw.flavorText } : {})
   };
 }

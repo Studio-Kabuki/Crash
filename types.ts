@@ -67,6 +67,9 @@ export type EffectTrigger =
 // カード分類
 export type CardType = 'attack' | 'support';
 
+// カード属性（プログラム/デザイン/サウンド/なし）
+export type CardAttribute = 'program' | 'design' | 'sound' | 'none';
+
 // ワークスタイル属性（旧レアリティ）
 export type Rarity = 'BLACK' | 'WHITE' | 'NEUTRAL';
 
@@ -114,6 +117,7 @@ export interface Skill {
   rarity: Rarity;
   flavorText?: string;    // 目立たない補足テキスト
   multiplier?: number;    // ダメージ倍率（征服者など、使用するたび増加）
+  attribute?: CardAttribute;  // カード属性（プログラム/デザイン/サウンド/なし）
 }
 
 export interface BattleEvent {

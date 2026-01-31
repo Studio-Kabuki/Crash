@@ -1,8 +1,22 @@
 
 import React, { useState, useEffect } from 'react';
-import { Skill, CardProps } from '../types';
-import { Clock, Ban, Users } from 'lucide-react';
+import { Skill, CardProps, CardAttribute } from '../types';
+import { Monitor, Palette, Music, Ban, Users } from 'lucide-react';
 import { calculateDamage } from '../utils/skillCalculations';
+
+// 属性に応じたアイコンと背景色を返す
+const getAttributeStyle = (attribute: CardAttribute | undefined) => {
+  switch (attribute) {
+    case 'program':
+      return { Icon: Monitor, bgClass: 'bg-blue-600', visible: true };
+    case 'design':
+      return { Icon: Palette, bgClass: 'bg-pink-600', visible: true };
+    case 'sound':
+      return { Icon: Music, bgClass: 'bg-purple-600', visible: true };
+    default:
+      return { Icon: null, bgClass: 'bg-slate-700', visible: false };
+  }
+};
 
 export const Card: React.FC<CardProps> = ({
   skill,
@@ -91,20 +105,23 @@ export const Card: React.FC<CardProps> = ({
         overflow-hidden
       `}
     >
-      {/* ヘッダーライン: ヘイスト | 士気 */}
+      {/* ヘッダーライン: 属性 | ブラック度変化 */}
       <div className={`
         w-full flex items-center justify-between px-2 py-1 border-b z-20
         ${skill.cardType === 'support' ? 'bg-teal-900/50 border-teal-700' : 'bg-slate-800 border-slate-700'}
       `}>
-        {/* ヘイスト（DELAY） */}
-        <div className={`flex items-center gap-1 px-1.5 py-0.5 rounded ${
-          actualDelay > 0
-            ? 'bg-white text-slate-900'
-            : 'text-slate-400'
-        }`}>
-          <Clock className="w-4 h-4" />
-          <span className="text-[0.65rem] font-black">{actualDelay}</span>
-        </div>
+        {/* 属性アイコン */}
+        {(() => {
+          const { Icon, bgClass, visible } = getAttributeStyle(skill.attribute);
+          if (visible && Icon) {
+            return (
+              <div className={`flex items-center justify-center w-6 h-6 rounded ${bgClass}`}>
+                <Icon className="w-4 h-4 text-white" />
+              </div>
+            );
+          }
+          return <div className="w-6 h-6" />;
+        })()}
 
         {/* ブラック度変化（+は赤/ブラック増、-は青/ブラック減、0なら非表示でスペース確保） */}
         <div className={`flex items-center gap-1 px-1.5 py-0.5 rounded ${

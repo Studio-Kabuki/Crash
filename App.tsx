@@ -2566,12 +2566,18 @@ const App: React.FC = () => {
                         </div>
                         {/* BUFFS */}
                         <div className="flex items-center gap-2 min-w-0">
-                          <span className="text-[0.5rem] font-black text-slate-500 uppercase shrink-0">BUFFS:</span>
-                          <div className="flex items-center gap-1 overflow-x-auto no-scrollbar">
+                          <span className="text-[0.625rem] font-black text-slate-500 uppercase shrink-0">BUFFS:</span>
+                          <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar">
                             {getAggregatedBuffs().map(buff => (
-                              <Tooltip key={buff.id} content={buff.description}>
+                              <Tooltip key={buff.id} content={
+                                buff.type === 'unity' ? '収益のベース値に加算' :
+                                buff.type === 'focus' ? '値を倍倍に' :
+                                buff.type === 'gacha' ? '倍どころじゃない、累乗だ!!' :
+                                buff.type === 'strength' ? 'このゲームだけ手伝ってくれる!' :
+                                buff.description
+                              }>
                                 <div
-                                  className={`flex items-center gap-1 px-2 py-0.5 rounded-full border transition-all animate-in fade-in zoom-in duration-300 shrink-0 cursor-pointer ${
+                                  className={`flex items-center gap-1.5 px-3 py-1 rounded-full border transition-all animate-in fade-in zoom-in duration-300 shrink-0 cursor-pointer ${
                                     buff.type === 'charge'
                                       ? 'bg-yellow-900/50 border-yellow-600'
                                       : buff.type === 'stat_up'
@@ -2591,8 +2597,11 @@ const App: React.FC = () => {
                                       : 'bg-red-900/50 border-red-600'
                                   }`}
                                 >
-                                  <SafeImage src={buff.icon} alt={buff.name} className="w-4 h-4 object-contain" />
-                                  <span className={`text-[0.5rem] font-black whitespace-nowrap ${
+                                  {/* スクラム・フロー・ガチャはアイコン非表示 */}
+                                  {buff.type !== 'unity' && buff.type !== 'focus' && buff.type !== 'gacha' && (
+                                    <SafeImage src={buff.icon} alt={buff.name} className="w-5 h-5 object-contain" />
+                                  )}
+                                  <span className={`text-[0.75rem] font-black whitespace-nowrap ${
                                     buff.type === 'charge'
                                       ? 'text-yellow-400'
                                       : buff.type === 'stat_up'
@@ -2619,8 +2628,8 @@ const App: React.FC = () => {
                                       ? 'text-red-400'
                                       : 'text-red-400'
                                   }`}>
-                                    {/* スクラム・フロー・ガチャは特別表示、それ以外は通常名 */}
-                                    {buff.type === 'unity' ? '収益+' : buff.type === 'focus' ? '収益×' : buff.type === 'gacha' ? '収益^' : buff.name}
+                                    {/* スクラム・フロー・ガチャは記号のみ、応援は社員、それ以外は通常名 */}
+                                    {buff.type === 'unity' ? '+' : buff.type === 'focus' ? '×' : buff.type === 'gacha' ? '^' : buff.type === 'strength' ? '社員' : buff.name}
                                     {buff.stackCount > 1 && buff.type !== 'unity' && buff.type !== 'focus' && buff.type !== 'strength' && buff.type !== 'gacha' && ` x${buff.stackCount}`}
                                     {buff.stat && ` +${buff.value}`}
                                     {buff.type === 'base_damage_boost' && ` x${buff.value}`}
