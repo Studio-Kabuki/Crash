@@ -29,3 +29,4 @@ number,string,string,string,string,string,number,number,number,number,number,str
 0,剣の舞,R,0コストのスラッシュを3枚デッキに追加,舞うように斬る,support,0,0,0,20,0,add_slash_to_deck,on_use,{"value":3},bg-slate-600,border-orange-400,h-9,w-52,rounded-full,https://img.icons8.com/fluency/144/two-swords.png
 0,パワースラッシュ,R,筋力+20を付与,力こそ正義,attack,30,100,0,0,10,add_strength,on_use,{"value":20},bg-orange-700,border-orange-400,h-9,w-56,rounded-sm transform -skew-x-12,https://img.icons8.com/fluency/144/sword.png
 0,怒りの一撃,SR,前が物理なら筋力2倍,怒りが力に変わる,attack,20,150,0,0,10,double_strength,on_use,{},bg-red-700,border-red-400,h-9,w-56,rounded-sm transform -skew-x-12,https://img.icons8.com/fluency/144/sword.png
+0,パリィ,R,パリィを付与。敵攻撃を受けると筋力+50,構えろ,support,0,0,0,0,5,add_parry,on_use,{},bg-slate-600,border-yellow-400,h-8,w-48,rounded-full,https://img.icons8.com/fluency/144/shield.png

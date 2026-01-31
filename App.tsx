@@ -798,6 +798,15 @@ const App: React.FC = () => {
   };
 
   const handleEnemyAttack = (currentStack: Skill[], currentDeck: Skill[], currentHand: Skill[]) => {
+    // パリィチェック: パリィバフがあれば消費して筋力+50
+    const hasParry = playerBuffs.some(b => b.type === 'parry');
+    if (hasParry) {
+      // パリィを消費
+      setPlayerBuffs(prev => prev.filter(b => b.type !== 'parry'));
+      // 筋力+50を付与
+      addBuff('STRENGTH', 50);
+    }
+
     // 即座にフラグを設定して連打を防止
     setIsMonsterAttacking(true);
     setTimeout(() => {
@@ -847,6 +856,9 @@ const App: React.FC = () => {
     if (currentHaste <= 0 || mana < skill.manaCost || isTargetMet || isMonsterAttacking || turnResetMessage || isShuffling || isProcessingCard) return;
 
     setIsProcessingCard(true); // カード処理開始
+
+    // パリィバフは次のカード使用で消える（敵攻撃時の処理は handleEnemyAttack で）
+    setPlayerBuffs(prev => prev.filter(b => b.type !== 'parry'));
 
     setProjectile({ icon: skill.icon, id: generateId() });
 
@@ -1063,6 +1075,10 @@ const App: React.FC = () => {
              }
              newDeck = [...newDeck, ...newSlashes];
              setDeck(newDeck);
+           }
+           if (skill.effect.type === 'add_parry') {
+             // パリィバフを付与
+             addBuff('PARRY', 1);
            }
            if (skill.effect.type === 'permanent_power_up') {
              // 倍率を増加（使用するたび+30%）

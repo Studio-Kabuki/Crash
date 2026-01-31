@@ -95,7 +95,7 @@ export interface HeroInitialData {
 // バフ定義（プレイヤーに付与されるバフ/デバフ）
 export interface BuffDefinition {
   id: string;
-  type: 'charge' | 'stat_up' | 'stat_down' | 'base_damage_boost' | 'strength';
+  type: 'charge' | 'stat_up' | 'stat_down' | 'base_damage_boost' | 'strength' | 'parry';
   name: string;
   icon: string;
   description: string;

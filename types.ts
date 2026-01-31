@@ -23,7 +23,8 @@ export type EffectType =
   | 'magic_count_bonus'    // 使用した魔法カード枚数×APボーナス
   | 'add_strength'         // 筋力バフを付与
   | 'double_strength'      // 前が物理なら筋力2倍
-  | 'add_slash_to_deck';   // 0コストスラッシュをデッキに追加
+  | 'add_slash_to_deck'    // 0コストスラッシュをデッキに追加
+  | 'add_parry';           // パリィバフを付与
 
 // バフタイプ
 export type BuffType =
@@ -31,7 +32,8 @@ export type BuffType =
   | 'stat_up'           // ステータスアップ
   | 'stat_down'         // ステータスダウン
   | 'base_damage_boost' // ベースダメージ倍化（スタック制）
-  | 'strength';         // 筋力（カード使用時1減、ADに加算）
+  | 'strength'          // 筋力（カード使用時10減、ADに加算）
+  | 'parry';            // パリィ（次カード使用で消滅、敵攻撃時に筋力+50）
 
 // プレイヤーのバフ/デバフ
 export interface PlayerBuff {

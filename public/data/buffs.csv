@@ -8,3 +8,4 @@ number,string,string,string,string,string,number,string,string
 0,AP_DOWN,ap_down,stat_down,魔力DOWN,魔法攻撃力が低下,-30,ap,https://img.icons8.com/fluency/144/magic-wand.png
 0,BASE_DOUBLE,base_double,base_damage_boost,集中,ベースダメージが2倍（スタック消費）,1,,https://img.icons8.com/fluency/144/meditation.png
 0,STRENGTH,strength,strength,筋力,カード使用時に10減り、ADに加算される,20,,https://img.icons8.com/fluency/144/muscle.png
+0,PARRY,parry,parry,パリィ,次のカード使用で消滅。敵攻撃時に筋力+50,1,,https://img.icons8.com/fluency/144/shield.png
