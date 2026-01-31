@@ -1,0 +1,13 @@
+disabled,key,id,title,description,physicalMultiplier,magicMultiplier,disableSupportEffects,disableBuffEffects,armorThreshold,manaDrainAmount,type
+number,string,string,string,string,number,number,number,number,number,number,string
+0,NEUTRAL,calm,静寂,特に異常はありません。,1.0,1.0,0,0,0,0,neutral
+0,PHYSICAL_BOOST,blood_moon,ブラッドムーン,物理ダメージが1.5倍になります。,1.5,1.0,0,0,0,0,positive
+0,MAGIC_BOOST,mana_overflow,マナの奔流,魔法ダメージが1.5倍になります。,1.0,1.5,0,0,0,0,positive
+0,PHYSICAL_RESIST,iron_skin,鋼の皮膚,物理ダメージが半減します。,0.5,1.0,0,0,0,0,negative
+0,MAGIC_RESIST,magic_barrier,対魔結界,魔法ダメージが半減します。,1.0,0.5,0,0,0,0,negative
+0,ANTI_SUPPORT,anti_support_field,アンチサポート,サポートカードの効果が無効化されます。,1.0,1.0,1,0,0,0,negative
+0,ANTI_BUFF,anti_buff_field,アンチバフ,サポートカードの特殊能力が発動しなくなります。,1.0,1.0,1,0,0,0,negative
+0,ARMOR,heavy_armor,重装甲,40以下のダメージを完全に無効化します。,1.0,1.0,0,0,40,0,negative
+0,ARMOR_HEAVY,super_armor,超重装甲,60以下のダメージを完全に無効化します。,1.0,1.0,0,0,60,0,negative
+0,ARMOR_ULTRA,ultra_armor,絶対防御,80以下のダメージを完全に無効化します。,1.0,1.0,0,0,80,0,negative
+0,MANA_DRAIN,mana_drain,マナ喰らい,カード使用後、マナを20減少させます。,1.0,1.0,0,0,0,20,negative

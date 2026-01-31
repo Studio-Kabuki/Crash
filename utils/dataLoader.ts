@@ -3,28 +3,30 @@ import { Skill, Enemy, BattleEvent, SkillEffect, EffectType, EffectTrigger, Effe
 
 // CSVから読み込む生データの型
 interface RawSkill {
+  disabled: number;      // 1で無効化
   name: string;
-  icon: string;
+  rarity: string;
+  effectDescription: string;
+  flavorText: string;    // 目立たない補足テキスト
   cardType: string;
   baseDamage: number;
   adRatio: number;
   apRatio: number;
   manaCost: number;
   delay: number;
+  effectType: string;
+  effectTrigger: string;
+  effectParams: string;  // JSON文字列
   color: string;
   borderColor: string;
   heightClass: string;
   widthClass: string;
   borderRadiusClass: string;
-  rarity: string;
-  effectType: string;
-  effectTrigger: string;
-  effectParams: string;  // JSON文字列
-  effectDescription: string;
-  flavorText: string;    // 目立たない補足テキスト
+  icon: string;
 }
 
 interface RawEnemy {
+  disabled: number;
   name: string;
   icon: string;
   baseHP: number;
@@ -44,6 +46,7 @@ interface RawHero {
 }
 
 interface RawPassive {
+  disabled: number;
   id: string;
   name: string;
   icon: string;
@@ -55,6 +58,33 @@ interface RawPassive {
   targetCategory: string;
 }
 
+interface RawTrait {
+  disabled: number;
+  key: string;
+  id: string;
+  title: string;
+  description: string;
+  physicalMultiplier: number;
+  magicMultiplier: number;
+  disableSupportEffects: number;
+  disableBuffEffects: number;
+  armorThreshold: number;
+  manaDrainAmount: number;
+  type: string;
+}
+
+interface RawBuff {
+  disabled: number;
+  key: string;
+  id: string;
+  type: string;
+  name: string;
+  description: string;
+  defaultValue: number;
+  stat: string;
+  icon: string;
+}
+
 // ヒーロー初期データ
 export interface HeroInitialData {
   stats: HeroStats;
@@ -62,180 +92,16 @@ export interface HeroInitialData {
   life: number;
 }
 
-// Trait定義（敵の特性）- 物理/魔法ダメージ倍率
-const TRAITS: Record<string, BattleEvent> = {
-  NEUTRAL: {
-    id: 'calm',
-    title: '静寂',
-    description: '特に異常はありません。',
-    physicalMultiplier: 1.0,
-    magicMultiplier: 1.0,
-    type: 'neutral'
-  },
-  PHYSICAL_BOOST: {
-    id: 'blood_moon',
-    title: 'ブラッドムーン',
-    description: '物理ダメージが1.5倍になります。',
-    physicalMultiplier: 1.5,
-    magicMultiplier: 1.0,
-    type: 'positive'
-  },
-  MAGIC_BOOST: {
-    id: 'mana_overflow',
-    title: 'マナの奔流',
-    description: '魔法ダメージが1.5倍になります。',
-    physicalMultiplier: 1.0,
-    magicMultiplier: 1.5,
-    type: 'positive'
-  },
-  PHYSICAL_RESIST: {
-    id: 'iron_skin',
-    title: '鋼の皮膚',
-    description: '物理ダメージが半減します。',
-    physicalMultiplier: 0.5,
-    magicMultiplier: 1.0,
-    type: 'negative'
-  },
-  MAGIC_RESIST: {
-    id: 'magic_barrier',
-    title: '対魔結界',
-    description: '魔法ダメージが半減します。',
-    physicalMultiplier: 1.0,
-    magicMultiplier: 0.5,
-    type: 'negative'
-  },
-  ANTI_SUPPORT: {
-    id: 'anti_support_field',
-    title: 'アンチサポート',
-    description: 'サポートカードの効果が無効化されます。',
-    physicalMultiplier: 1.0,
-    magicMultiplier: 1.0,
-    disableSupportEffects: true,
-    type: 'negative'
-  },
-  ANTI_BUFF: {
-    id: 'anti_buff_field',
-    title: 'アンチバフ',
-    description: 'サポートカードの特殊能力が発動しなくなります。',
-    physicalMultiplier: 1.0,
-    magicMultiplier: 1.0,
-    disableSupportEffects: true,
-    type: 'negative'
-  },
-  ARMOR: {
-    id: 'heavy_armor',
-    title: '重装甲',
-    description: '40以下のダメージを完全に無効化します。',
-    physicalMultiplier: 1.0,
-    magicMultiplier: 1.0,
-    armorThreshold: 40,
-    type: 'negative'
-  },
-  ARMOR_HEAVY: {
-    id: 'super_armor',
-    title: '超重装甲',
-    description: '60以下のダメージを完全に無効化します。',
-    physicalMultiplier: 1.0,
-    magicMultiplier: 1.0,
-    armorThreshold: 60,
-    type: 'negative'
-  },
-  ARMOR_ULTRA: {
-    id: 'ultra_armor',
-    title: '絶対防御',
-    description: '80以下のダメージを完全に無効化します。',
-    physicalMultiplier: 1.0,
-    magicMultiplier: 1.0,
-    armorThreshold: 80,
-    type: 'negative'
-  },
-  MANA_DRAIN: {
-    id: 'mana_drain',
-    title: 'マナ喰らい',
-    description: 'カード使用後、マナを20減少させます。',
-    physicalMultiplier: 1.0,
-    magicMultiplier: 1.0,
-    manaDrainAmount: 20,
-    type: 'negative'
-  }
-};
-
-export const DEFAULT_EVENT = TRAITS.NEUTRAL;
-
 // バフ定義（プレイヤーに付与されるバフ/デバフ）
 export interface BuffDefinition {
   id: string;
-  type: 'charge' | 'stat_up' | 'stat_down' | 'base_damage_boost';
+  type: 'charge' | 'stat_up' | 'stat_down' | 'base_damage_boost' | 'strength';
   name: string;
   icon: string;
   description: string;
   defaultValue: number;
   stat?: 'ad' | 'ap' | 'sp' | 'mp';
 }
-
-export const BUFFS: Record<string, BuffDefinition> = {
-  CHARGE: {
-    id: 'charge',
-    type: 'charge',
-    name: 'ためる',
-    icon: 'https://img.icons8.com/fluency/144/lightning-bolt.png',
-    description: '次のアタックカードを複数回発動',
-    defaultValue: 2
-  },
-  AD_UP: {
-    id: 'ad_up',
-    type: 'stat_up',
-    name: '攻撃力UP',
-    icon: 'https://img.icons8.com/fluency/144/sword.png',
-    description: '物理攻撃力が上昇',
-    defaultValue: 50,
-    stat: 'ad'
-  },
-  AP_UP: {
-    id: 'ap_up',
-    type: 'stat_up',
-    name: '魔力UP',
-    icon: 'https://img.icons8.com/fluency/144/magic-wand.png',
-    description: '魔法攻撃力が上昇',
-    defaultValue: 50,
-    stat: 'ap'
-  },
-  SP_UP: {
-    id: 'sp_up',
-    type: 'stat_up',
-    name: 'ヘイストUP',
-    icon: 'https://img.icons8.com/fluency/144/running.png',
-    description: 'ヘイストが上昇',
-    defaultValue: 20,
-    stat: 'sp'
-  },
-  AD_DOWN: {
-    id: 'ad_down',
-    type: 'stat_down',
-    name: '攻撃力DOWN',
-    icon: 'https://img.icons8.com/fluency/144/sword.png',
-    description: '物理攻撃力が低下',
-    defaultValue: -30,
-    stat: 'ad'
-  },
-  AP_DOWN: {
-    id: 'ap_down',
-    type: 'stat_down',
-    name: '魔力DOWN',
-    icon: 'https://img.icons8.com/fluency/144/magic-wand.png',
-    description: '魔法攻撃力が低下',
-    defaultValue: -30,
-    stat: 'ap'
-  },
-  BASE_DOUBLE: {
-    id: 'base_double',
-    type: 'base_damage_boost',
-    name: '集中',
-    icon: 'https://img.icons8.com/fluency/144/meditation.png',
-    description: 'ベースダメージが2倍（スタック消費）',
-    defaultValue: 1
-  }
-};
 
 // ID生成
 const generateId = () => Math.random().toString(36).substr(2, 9);
@@ -338,24 +204,66 @@ export interface GameData {
   enemies: Enemy[];
   heroData: HeroInitialData;
   passivePool: PassiveEffect[];
+  traits: Record<string, BattleEvent>;
+  buffs: Record<string, BuffDefinition>;
 }
 
 export async function loadGameData(): Promise<GameData> {
-  const [rawSkills, rawEnemies, rawHeroes, rawPassives] = await Promise.all([
+  const [rawSkills, rawEnemies, rawHeroes, rawPassives, rawTraits, rawBuffs] = await Promise.all([
     loadCSV<RawSkill>('/data/skills.csv'),
     loadCSV<RawEnemy>('/data/enemies.csv'),
     loadCSV<RawHero>('/data/hero.csv'),
-    loadCSV<RawPassive>('/data/passives.csv')
+    loadCSV<RawPassive>('/data/passives.csv'),
+    loadCSV<RawTrait>('/data/traits.csv'),
+    loadCSV<RawBuff>('/data/buffs.csv')
   ]);
 
-  const allSkills = rawSkills.map(convertToSkill);
-  const enemies = rawEnemies.map(convertToEnemy);
+  // disabled=1のデータを除外
+  const enabledSkills = rawSkills.filter(raw => !raw.disabled || raw.disabled === 0);
+  const enabledEnemies = rawEnemies.filter(raw => !raw.disabled || raw.disabled === 0);
+  const enabledPassives = rawPassives.filter(raw => !raw.disabled || raw.disabled === 0);
+
+  const allSkills = enabledSkills.map(convertToSkill);
+  const enemies = enabledEnemies.map(convertToEnemy);
   const heroData = rawHeroes.length > 0 ? convertToHeroData(rawHeroes[0]) : {
     stats: { ad: 30, ap: 10, sp: 30, mp: 50 },
     mana: 50,
     life: 2
   };
-  const passivePool = rawPassives.map(convertToPassive);
+  const passivePool = enabledPassives.map(convertToPassive);
+
+  // Traitsを変換（keyでRecord化）
+  const enabledTraits = rawTraits.filter(raw => !raw.disabled || raw.disabled === 0);
+  const traits: Record<string, BattleEvent> = {};
+  enabledTraits.forEach(raw => {
+    traits[raw.key] = {
+      id: raw.id,
+      title: raw.title,
+      description: raw.description,
+      physicalMultiplier: raw.physicalMultiplier,
+      magicMultiplier: raw.magicMultiplier,
+      disableSupportEffects: raw.disableSupportEffects === 1,
+      disableBuffEffects: raw.disableBuffEffects === 1,
+      armorThreshold: raw.armorThreshold || undefined,
+      manaDrainAmount: raw.manaDrainAmount || undefined,
+      type: raw.type as 'positive' | 'negative' | 'neutral'
+    };
+  });
+
+  // Buffsを変換（keyでRecord化）
+  const enabledBuffs = rawBuffs.filter(raw => !raw.disabled || raw.disabled === 0);
+  const buffs: Record<string, BuffDefinition> = {};
+  enabledBuffs.forEach(raw => {
+    buffs[raw.key] = {
+      id: raw.id,
+      type: raw.type as BuffDefinition['type'],
+      name: raw.name,
+      icon: raw.icon,
+      description: raw.description,
+      defaultValue: raw.defaultValue,
+      stat: raw.stat as 'ad' | 'ap' | 'sp' | 'mp' | undefined
+    };
+  });
 
   // 初期スキル: スラッシュ、ハイスラッシュ、ためる
   const initialSkillNames = ['スラッシュ', 'ハイスラッシュ', 'ためる'];
@@ -370,6 +278,8 @@ export async function loadGameData(): Promise<GameData> {
     skillPool,
     enemies,
     heroData,
-    passivePool
+    passivePool,
+    traits,
+    buffs
   };
 }

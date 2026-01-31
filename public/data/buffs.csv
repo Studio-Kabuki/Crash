@@ -1,0 +1,10 @@
+disabled,key,id,type,name,description,defaultValue,stat,icon
+number,string,string,string,string,string,number,string,string
+0,CHARGE,charge,charge,ためる,次のアタックカードを複数回発動,2,,https://img.icons8.com/fluency/144/lightning-bolt.png
+0,AD_UP,ad_up,stat_up,攻撃力UP,物理攻撃力が上昇,50,ad,https://img.icons8.com/fluency/144/sword.png
+0,AP_UP,ap_up,stat_up,魔力UP,魔法攻撃力が上昇,50,ap,https://img.icons8.com/fluency/144/magic-wand.png
+0,SP_UP,sp_up,stat_up,ヘイストUP,ヘイストが上昇,20,sp,https://img.icons8.com/fluency/144/running.png
+0,AD_DOWN,ad_down,stat_down,攻撃力DOWN,物理攻撃力が低下,-30,ad,https://img.icons8.com/fluency/144/sword.png
+0,AP_DOWN,ap_down,stat_down,魔力DOWN,魔法攻撃力が低下,-30,ap,https://img.icons8.com/fluency/144/magic-wand.png
+0,BASE_DOUBLE,base_double,base_damage_boost,集中,ベースダメージが2倍（スタック消費）,1,,https://img.icons8.com/fluency/144/meditation.png
+0,STRENGTH,strength,strength,筋力,カード使用時に10減り、ADに加算される,20,,https://img.icons8.com/fluency/144/muscle.png

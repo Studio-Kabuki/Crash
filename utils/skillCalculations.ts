@@ -69,13 +69,14 @@ interface DamageCalculationParams {
   heroStats: HeroStats;
   multipliers: DamageMultipliers;
   baseDoubleStacks?: number;  // 集中バフのスタック数
+  strengthValue?: number;     // 筋力バフの値（ADに加算）
 }
 
 /**
  * スキルのダメージを計算する共通関数
  */
 export function calculateDamage(params: DamageCalculationParams): number {
-  const { skill, heroStats, multipliers, baseDoubleStacks = 0 } = params;
+  const { skill, heroStats, multipliers, baseDoubleStacks = 0, strengthValue = 0 } = params;
 
   let baseDmg = skill.baseDamage || 0;
 
@@ -100,8 +101,11 @@ export function calculateDamage(params: DamageCalculationParams): number {
     scaledBaseDmg = baseDmg;
   }
 
+  // 筋力バフをADに加算
+  const effectiveAd = heroStats.ad + strengthValue;
+
   // 係数ダメージ計算
-  const physicalDmg = Math.floor(heroStats.ad * skill.adRatio / 100 * multipliers.physicalMultiplier);
+  const physicalDmg = Math.floor(effectiveAd * skill.adRatio / 100 * multipliers.physicalMultiplier);
   const magicDmg = Math.floor(heroStats.ap * skill.apRatio / 100 * multipliers.magicMultiplier);
 
   // 征服者などのカード固有倍率を適用

@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { GameState, Skill, PassiveEffect, BattleEvent, Enemy, Rarity, HeroStats, PlayerBuff } from './types';
-import { loadGameData, GameData, DEFAULT_EVENT, createSkillWithId, BUFFS, BuffDefinition, HeroInitialData } from './utils/dataLoader';
+import { loadGameData, GameData, createSkillWithId, BuffDefinition, HeroInitialData } from './utils/dataLoader';
 import { calculateHaste } from './utils/skillCalculations';
 import { useDragScroll } from './hooks/useDragScroll';
 import { Card } from './components/Card';
@@ -45,12 +45,21 @@ const App: React.FC = () => {
   const [cardRewards, setCardRewards] = useState<Skill[]>([]);
   
   const [currentComboPower, setCurrentComboPower] = useState<number>(0);
-  const [battleEvent, setBattleEvent] = useState<BattleEvent>(DEFAULT_EVENT);
-  
+
   // デフォルト初期値（CSVロード前のフォールバック）
   const defaultHeroStats: HeroStats = { ad: 30, ap: 10, sp: 30, mp: 50 };
   const defaultMana = 50;
   const defaultLife = 2;
+  const defaultEvent: BattleEvent = {
+    id: 'calm',
+    title: '静寂',
+    description: '特に異常はありません。',
+    physicalMultiplier: 1.0,
+    magicMultiplier: 1.0,
+    type: 'neutral'
+  };
+
+  const [battleEvent, setBattleEvent] = useState<BattleEvent>(defaultEvent);
 
   const [mana, setMana] = useState<number>(defaultMana);
   const [life, setLife] = useState<number>(defaultLife);
@@ -221,7 +230,7 @@ const App: React.FC = () => {
 
   // バフを付与する関数
   const addBuff = (buffId: string, customValue?: number) => {
-    const buffDef = BUFFS[buffId];
+    const buffDef = gameData?.buffs[buffId];
     if (!buffDef) {
       console.warn(`Buff definition not found: ${buffId}`);
       return;
@@ -229,13 +238,13 @@ const App: React.FC = () => {
 
     const valueToAdd = customValue ?? buffDef.defaultValue;
 
-    // base_damage_boostの場合、既存のバフがあればスタックを加算
-    if (buffDef.type === 'base_damage_boost') {
+    // base_damage_boostまたはstrengthの場合、既存のバフがあればスタックを加算
+    if (buffDef.type === 'base_damage_boost' || buffDef.type === 'strength') {
       setPlayerBuffs(prev => {
-        const existingBuff = prev.find(b => b.type === 'base_damage_boost');
+        const existingBuff = prev.find(b => b.type === buffDef.type);
         if (existingBuff) {
           return prev.map(b =>
-            b.type === 'base_damage_boost' ? { ...b, value: b.value + valueToAdd } : b
+            b.type === buffDef.type ? { ...b, value: b.value + valueToAdd } : b
           );
         } else {
           const newBuff: PlayerBuff = {
@@ -461,7 +470,7 @@ const App: React.FC = () => {
     const initialEnemy = getEnemyForLevel(1);
     setCurrentEnemy(initialEnemy);
     setEnemyHealth(initialEnemy.baseHP);
-    setBattleEvent(initialEnemy.trait || DEFAULT_EVENT);
+    setBattleEvent(initialEnemy.trait || (gameData?.traits['NEUTRAL'] ?? defaultEvent));
 
     // 初期手札を引く（パッシブがないのでbaseHandSize枚）
     const cardsToDraw = Math.min(baseHandSize, battleDeck.length);
@@ -490,7 +499,7 @@ const App: React.FC = () => {
         const nextEnemy = getEnemyForLevel(nextLvl);
         setCurrentEnemy(nextEnemy);
         setEnemyHealth(nextEnemy.baseHP);
-        setBattleEvent(nextEnemy.trait || DEFAULT_EVENT);
+        setBattleEvent(nextEnemy.trait || (gameData?.traits['NEUTRAL'] ?? defaultEvent));
 
         // handSize枚引く（デッキから引いた分を除く）
         const cardsToDraw = Math.min(handSize, battleDeck.length);
@@ -705,17 +714,47 @@ const App: React.FC = () => {
       scaledBaseDmg = baseDmg;
     }
 
+    // 筋力バフをADに加算
+    const effectiveAd = heroStats.ad + getStrengthValue();
+
     // マイナス係数の場合はベースダメージから差し引く
-    const physicalDmg = Math.floor(heroStats.ad * s.adRatio / 100 * battleEvent.physicalMultiplier);
+    const physicalDmg = Math.floor(effectiveAd * s.adRatio / 100 * battleEvent.physicalMultiplier);
     const magicDmg = Math.floor(heroStats.ap * s.apRatio / 100 * battleEvent.magicMultiplier);
+
+    // 征服者などのカード固有倍率を適用
+    const skillMultiplier = s.multiplier ?? 1.0;
+    const totalDamage = Math.floor((scaledBaseDmg + physicalDmg + magicDmg) * skillMultiplier);
+
     // ダメージは0未満にならない
-    return Math.max(0, scaledBaseDmg + physicalDmg + magicDmg);
+    return Math.max(0, totalDamage);
+  };
+
+  // バフを集約（同じタイプのバフをまとめてvalueを合計）
+  const getAggregatedBuffs = (): PlayerBuff[] => {
+    const buffMap = new Map<string, PlayerBuff>();
+    playerBuffs.forEach(buff => {
+      const key = `${buff.type}-${buff.stat || ''}`;
+      if (buffMap.has(key)) {
+        const existing = buffMap.get(key)!;
+        existing.value += buff.value;
+      } else {
+        buffMap.set(key, { ...buff });
+      }
+    });
+    return Array.from(buffMap.values());
   };
 
   // chargeバフがあるかチェック（ダメージ表示用）
   const getChargeMultiplier = (): number => {
     const chargeBuff = playerBuffs.find(b => b.type === 'charge');
     return chargeBuff ? chargeBuff.value : 1;
+  };
+
+  // 筋力バフの合計値を取得
+  const getStrengthValue = (): number => {
+    return playerBuffs
+      .filter(b => b.type === 'strength')
+      .reduce((sum, b) => sum + b.value, 0);
   };
 
   // 前のカードが物理ダメージだったかチェック
@@ -888,6 +927,21 @@ const App: React.FC = () => {
           });
         }
 
+        // 筋力バフを10減少させる（0以下になったら削除）
+        setPlayerBuffs(prev => {
+          const strengthBuff = prev.find(b => b.type === 'strength');
+          if (strengthBuff) {
+            const newValue = strengthBuff.value - 10;
+            if (newValue <= 0) {
+              return prev.filter(b => b.type !== 'strength');
+            }
+            return prev.map(b =>
+              b.type === 'strength' ? { ...b, value: newValue } : b
+            );
+          }
+          return prev;
+        });
+
         const newTotalPower = calculateComboPower(newStack);
         let damageDealt = (newTotalPower - currentComboPower) * repeatCount;
         const poisonDmg = isEnemyPoisoned ? 30 : 0;
@@ -964,6 +1018,51 @@ const App: React.FC = () => {
            }
            if (skill.effect.type === 'add_buff' && skill.effect.params.buffId) {
              addBuff(skill.effect.params.buffId, skill.effect.params.value);
+           }
+           if (skill.effect.type === 'add_strength') {
+             // 筋力バフを付与（パラメータで指定された値、デフォルト20）
+             const strengthAmount = skill.effect.params.value || 20;
+             addBuff('STRENGTH', strengthAmount);
+           }
+           if (skill.effect.type === 'double_strength') {
+             // 前が物理なら筋力2倍
+             if (wasLastCardPhysical()) {
+               setPlayerBuffs(prev => {
+                 const strengthBuff = prev.find(b => b.type === 'strength');
+                 if (strengthBuff) {
+                   return prev.map(b =>
+                     b.type === 'strength' ? { ...b, value: b.value * 2 } : b
+                   );
+                 }
+                 return prev;
+               });
+             }
+           }
+           if (skill.effect.type === 'add_slash_to_deck') {
+             // 0コスト・0ヘイストのスラッシュを戦闘中デッキに追加
+             const slashCount = skill.effect.params.value || 3;
+             const baseSlash: Omit<Skill, 'id'> = {
+               name: 'スラッシュ',
+               icon: 'https://img.icons8.com/fluency/144/sword.png',
+               cardType: 'attack',
+               baseDamage: 20,
+               adRatio: 100,
+               apRatio: 0,
+               manaCost: 0,
+               delay: 0,
+               color: 'bg-slate-700',
+               borderColor: 'border-slate-400',
+               heightClass: 'h-8',
+               widthClass: 'w-56',
+               borderRadiusClass: 'rounded-sm transform -skew-x-12',
+               rarity: 'C' as const
+             };
+             const newSlashes: Skill[] = [];
+             for (let i = 0; i < slashCount; i++) {
+               newSlashes.push({ ...baseSlash, id: generateId() });
+             }
+             newDeck = [...newDeck, ...newSlashes];
+             setDeck(newDeck);
            }
            if (skill.effect.type === 'permanent_power_up') {
              // 倍率を増加（使用するたび+30%）
@@ -2200,7 +2299,7 @@ const App: React.FC = () => {
                         <div className="flex items-center gap-2 min-w-0">
                           <span className="text-[0.5rem] font-black text-slate-500 uppercase shrink-0">BUFFS:</span>
                           <div className="flex items-center gap-1 overflow-x-auto no-scrollbar">
-                            {playerBuffs.map(buff => (
+                            {getAggregatedBuffs().map(buff => (
                               <Tooltip key={buff.id} content={buff.description}>
                                 <div
                                   className={`flex items-center gap-1 px-2 py-0.5 rounded-full border transition-all animate-in fade-in zoom-in duration-300 shrink-0 cursor-pointer ${
@@ -2210,6 +2309,8 @@ const App: React.FC = () => {
                                       ? 'bg-green-900/50 border-green-600'
                                       : buff.type === 'base_damage_boost'
                                       ? 'bg-cyan-900/50 border-cyan-600'
+                                      : buff.type === 'strength'
+                                      ? 'bg-orange-900/50 border-orange-600'
                                       : 'bg-red-900/50 border-red-600'
                                   }`}
                                 >
@@ -2221,11 +2322,14 @@ const App: React.FC = () => {
                                       ? 'text-green-400'
                                       : buff.type === 'base_damage_boost'
                                       ? 'text-cyan-400'
+                                      : buff.type === 'strength'
+                                      ? 'text-orange-400'
                                       : 'text-red-400'
                                   }`}>
                                     {buff.name}
                                     {buff.stat && ` +${buff.value}`}
                                     {buff.type === 'base_damage_boost' && ` x${buff.value}`}
+                                    {buff.type === 'strength' && ` ${buff.value}`}
                                   </span>
                                 </div>
                               </Tooltip>

@@ -20,14 +20,18 @@ export type EffectType =
   | 'add_copy_to_deck'     // カードのコピーをデッキに追加
   | 'discard_redraw'       // 手札を全て捨てて捨てた数+1ドロー
   | 'magic_lifesteal'      // 魔法ダメージ分マナ回復
-  | 'magic_count_bonus';   // 使用した魔法カード枚数×APボーナス
+  | 'magic_count_bonus'    // 使用した魔法カード枚数×APボーナス
+  | 'add_strength'         // 筋力バフを付与
+  | 'double_strength'      // 前が物理なら筋力2倍
+  | 'add_slash_to_deck';   // 0コストスラッシュをデッキに追加
 
 // バフタイプ
 export type BuffType =
   | 'charge'            // ためる（次のアタックを複数回発動）
   | 'stat_up'           // ステータスアップ
   | 'stat_down'         // ステータスダウン
-  | 'base_damage_boost'; // ベースダメージ倍化（スタック制）
+  | 'base_damage_boost' // ベースダメージ倍化（スタック制）
+  | 'strength';         // 筋力（カード使用時1減、ADに加算）
 
 // プレイヤーのバフ/デバフ
 export interface PlayerBuff {

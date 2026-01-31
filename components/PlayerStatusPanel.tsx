@@ -51,6 +51,21 @@ const PlayerStatusPanel: React.FC<PlayerStatusPanelProps> = ({
   onDeckClick,
   compact = false,
 }) => {
+  // バフを集約（同じタイプのバフをまとめてvalueを合計）
+  const getAggregatedBuffs = () => {
+    const buffMap = new Map<string, PlayerBuff & { totalValue?: number }>();
+    playerBuffs.forEach(buff => {
+      const key = buff.type;
+      if (buffMap.has(key)) {
+        const existing = buffMap.get(key)!;
+        existing.totalValue = (existing.totalValue || existing.stacks || 1) + (buff.stacks || 1);
+      } else {
+        buffMap.set(key, { ...buff, totalValue: buff.stacks || 1 });
+      }
+    });
+    return Array.from(buffMap.values());
+  };
+
   return (
     <div className={`flex flex-col gap-2 w-full ${compact ? 'text-xs' : ''}`}>
       {/* ライフ表示 */}
@@ -180,7 +195,7 @@ const PlayerStatusPanel: React.FC<PlayerStatusPanelProps> = ({
           <div className="flex items-center gap-2 min-w-0">
             <span className="text-[0.5rem] font-black text-slate-500 uppercase shrink-0">BUFFS:</span>
             <div className="flex items-center gap-1 overflow-x-auto no-scrollbar">
-              {playerBuffs.map(buff => (
+              {getAggregatedBuffs().map(buff => (
                 <Tooltip key={buff.id} content={buff.description}>
                   <div
                     className={`flex items-center gap-1 px-2 py-0.5 rounded-full border transition-all animate-in fade-in zoom-in duration-300 shrink-0 cursor-pointer ${
@@ -188,6 +203,8 @@ const PlayerStatusPanel: React.FC<PlayerStatusPanelProps> = ({
                         ? 'bg-yellow-900/50 border-yellow-600'
                         : buff.type === 'stat_up'
                         ? 'bg-green-900/50 border-green-600'
+                        : buff.type === 'strength'
+                        ? 'bg-orange-900/50 border-orange-600'
                         : buff.type === 'defensive'
                         ? 'bg-blue-900/50 border-blue-600'
                         : 'bg-purple-900/50 border-purple-600'
@@ -195,8 +212,8 @@ const PlayerStatusPanel: React.FC<PlayerStatusPanelProps> = ({
                   >
                     {buff.icon}
                     <span className="text-[0.5rem] font-black text-white">{buff.name}</span>
-                    {buff.stacks && buff.stacks > 1 && (
-                      <span className="text-[0.5rem] font-black text-yellow-400">x{buff.stacks}</span>
+                    {buff.totalValue && buff.totalValue > 0 && (
+                      <span className="text-[0.5rem] font-black text-yellow-400">{buff.totalValue}</span>
                     )}
                   </div>
                 </Tooltip>
